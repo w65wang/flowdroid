@@ -1,0 +1,8 @@
+module org.jhotdraw.samples.draw extends org.jhotdraw.samples.defaultsample;
+
+import own org.jhotdraw.samples.draw.drawjhotdraw as drawjhotdraw;
+
+//replace with extended version of jhotdraw
+replace jhotdraw with drawjhotdraw;
+
+export package *;

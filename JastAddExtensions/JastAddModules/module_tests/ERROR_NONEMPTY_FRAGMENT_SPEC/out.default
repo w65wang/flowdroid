@@ -1,0 +1,4 @@
+frag1.module:1:
+  Semantic Error: Module interfaces must not have any imports, merges or replaces.
+frag1.module:1:
+  Semantic Error: Module interfaces should have no member compilation units. Offending files: Y.java, X.java

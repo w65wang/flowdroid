@@ -1,0 +1,144 @@
+This section provides an overview of the functionality provided by existing module systems currently 
+in use for Java and other similar languages. 
+Several \cite{javajars, OSGi4, netassemblies} have been successfully used in industry 
+applications for several years now and would provide a reasonable baseline
+for the abilities that the proposed module system should possess. This section will also
+highlight the shortcomings of existing system, which will be addressed in later sections.
+
+\subsection{Composition and Information Hiding}
+
+Composition is the most basic functionality required of a module system. There
+should be a way for a member of a module to access and be accessed by members of
+another module. The module system should also have the ability to limit
+these accesses to allow for information hiding and loose coupling.
+
+In Java, the classpath provides the most basic level of module composition. 
+The classpath provides a list of libraries that are
+available during compilation or execution. Classes are looked up in the 
+classpath entries in the order they appear, which is fine as long as the sets 
+of classes that the entries provide are disjoint. If this is not the case, however, the class may
+be loaded from the wrong library. This is JAR hell. Bugs caused by JAR hell
+can be difficult to diagnose as the error occurs below the module level, as 
+a class cast exception or an invalid method or field access.
+
+Module versioning systems have more or less been built as solutions to JAR hell. 
+OSGi \cite{OSGi4} bundles, JSR 277 modules \cite{JSR277} and .NET assemblies \cite{netassemblies}
+have import declarations to define required modules or packages, and use constraints 
+to make sure that the modules used by an application satisfy the 
+application's requirements. 
+
+Information hiding and composition in current module systems is
+implemented as a set of imports and exports.
+The set of a module's imports and exports specify the packages (or types) that
+the module requires and provides, respectively. This affects class
+visibility outside the module and is used to enhance information hiding. 
+
+OSGi bundles and JSR 277 modules allow a user to specify a set of package imports 
+and exports that specifies the modules required packages, and the set of packages 
+it makes available outside the module. They also both allow a module
+to explicitly import another bundle/module and its packages.
+
+Component Nextgen \cite{componentnextgen} uses interfaces for modules, which
+specify a parameterized signature of classes that a module provides.
+
+\subsection{Versioning}
+Adding versions as meta-data to modules is the common solution to multiple
+versions of a class. OSGi bundles, the JSR 277 Java Module System
+proposal and .NET assemblies have extensive mechanisms for allowing a 
+module's client to specify the versions of a module that it supports.
+
+Versioning constraints in OSGi are specified at the point of import. The
+listing below shows a sample OSGi bundle \textit{org.jhotdraw.samples.svg}
+that imports the bundles \textit{org.jhotdraw}, \textit{net.n3.nanoxml} and
+\textit{org.apache.batik}. It further specifies a version constraint on
+the \textit{batik} import, that its version should be 1.6 (inclusive) as
+a minimum, and 1.9 (exclusive) as a maximum.
+
+\begin{lstlisting}[caption=OSGi Bundle Version Constraints]
+Bundle-Name: JHotdraw SVG Sample Application
+Bundle-SymbolicName: org.jhotdraw.samples.svg
+Bundle-Version: 1.0.0
+...
+Require-Bundle: org.jhotdraw, net.n3.nanoxml,
+    org.apache.batik;bundle-version="[1.6.0,1.9.0)"
+\end{lstlisting}
+
+To ensure that clients of a bundle are using the same instance, a bundle can be declared
+\textit{singleton}. For a given symbilic name, only once instance of a singleton
+bundle is allowed to exist, ensuring that its clients all point to the same bundle instance.
+
+\begin{lstlisting}[caption=OSGi Singleton]
+Bundle-SymbolicName: org.apache.batik;singleton:=true
+\end{lstlisting}
+
+In .NET assemblies, an application depends on the specific version of the 
+dependencies it is compiled with, unless it is overridden by a configuration
+file. Old versions can be updated to new versions through version redirection,
+which is specified in the configuration file. The following example, taken
+from the .NET MSDN pages, references to \textit{myAssembly} version 1.0.0.0
+are redirected to use version 2.0.0.0 instead.
+
+\begin{lstlisting}[caption=.NET Assemblies Version Redirection]
+<dependentAssembly>
+  <assemblyIdentity name="myAssembly" publicKeyToken="32ab4ba45e0a69a1" 
+	   	culture="en-us" />
+  <!-- Redirect references to myAssembly v1.0.0.0 to use v2.0.0.0-->
+  <bindingRedirect oldVersion="1.0.0.0" newVersion="2.0.0.0" />
+</dependentAssembly>
+\end{lstlisting}
+
+Redirection in .NET assemblies may also be specified by the publisher of the
+assembly instead of the client. The syntax for the publisher policy is identical
+to that above, and becomes the default binding policy for all clients of the assembly.
+It can be disabled, however, to allow a client to manually specify the version of
+a dependency to use.
+
+These constructs, however, have limitations. In OSGi, singleton bundles ensure
+consistency of a shared dependency, but make it impossible to use two versions of
+a bundle. As an example, say a bundle \textit{Z} is a singleton, and it is required
+by the bundles \textit{X} and \textit{Y}. However, \textit{X} and \textit{Y} require 
+different versions of the bundle, and cannot be both satisfied with a single bundle version.
+The .NET version redirection becomes extremely cumbersome to use as systems get larger: you
+not only are responsible for redirecting your direct dependencies, but also your indirect
+dependencies (i.e. the dependencies of your dependencies) if you wish to share types. You
+would need to put in a redirect element for every previous version that you wish to replace
+with a newer one.
+
+\subsection{Extension}
+
+Module systems in current use such as OSGi bundles and .NET assemblies do not 
+have explicit support for module patching and extension. A method for patching OSGi bundles
+involve using bundle fragments (which were designed for localization, not extension)
+to add and shadow classes in a bundle \cite{patchingosgi}. This process, however, is
+a destructive (but reversible) update, as a bundle fragment is treated as part of its 
+host bundle. As long as the bundle fragment is deployed in the system, all references 
+to the host bundle will be affected by the patch. It is, however, reversible as 
+removing the patch fragment will revert the host bundle to its original configuration.
+
+At the time this paper is being written, there is no explicitly supported method for
+patching .NET assemblies. There are tools that allow for manual assembly patching 
+\cite{reflexil, monocecil}, but as with OSGi, these are destructive updates.
+
+Allowing for patches and extensions that can coexist with the original module has the
+advantage of smaller patch sizes (important if the size of the module being patched is
+large), and the ability to create variants of a module without affecting the current
+clients of the module.
+
+\subsection{Instantiation}
+With increasingly large and complex systems that involve a large number of components,
+each possibly requiring different versions of a common module,
+the ability to allow multiple versions of the same class to coexist become necessary.
+Indeed, a single module may require two versions of a another module because its
+components require different versions. This implies the creation of multiple instances 
+of a module in a repository from which the classes are to be loaded, and the ability
+for a module to load and distinguish multiple versions of that module in its code.
+
+iJAM \cite{iJAM} provides a module instantiation feature that allows a module to create
+separate instances of its imported modules. This was a solution for type lookup
+problems caused by the {\it parent-then-self} class loading scheme proposed for
+JSR 294 \cite{JSR294}.
+
+However, type lookup when there are multiple instances of the same module are still
+reliant of fixed lookup orders: {\it self-then-parent} for iJAM and the reverse for JSR 294.
+Real world applications require more flexibility than is provided by a single fixed
+lookup rule \cite{iJAMComments}.

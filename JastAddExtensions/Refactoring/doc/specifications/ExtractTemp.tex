@@ -1,0 +1,81 @@
+\subsection{\refactoring{Extract Temp}}
+This refactoring extracts an expression into a local variable. Implemented in \sourcelink{ExtractTemp/ExtractTemp.jrag}; see Algorithms~\ref{alg:ExtractTemp}, \ref{alg:InsertLocalVariable}, \ref{alg:ExtractAssignment}, \ref{alg:MergeVariableDeclaration}.
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Extract Temp}(e : \type{Expr}, n : \type{Name}) : LocalVar$}
+\label{alg:ExtractTemp}
+\begin{algorithmic}[1]
+\REQUIRE Java
+\ENSURE Java $\cup$ locked names, locked dataflow
+\medskip
+\STATE $t \leftarrow \text{effective type of $e$}$
+\STATE $v \leftarrow \text{new local variable of type $t$ and name $n$}$
+\STATE $s \leftarrow \text{enclosing statement of $e$}$
+\STATE $\refactoring{Insert Local Variable}(s, v)$
+\STATE $\refactoring{Extract Assignment}(v, e)$
+\STATE $\refactoring{Merge Declaration}(v)$
+\RETURN $v$
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{\refactoring{Insert Local Variable}}
+The refactoring inserts a local variable before a given statement. Implemented in \sourcelink{ExtractTemp/IntroduceUnusedLocal.jrag}.
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Insert Local Variable}(s : \type{Stmt}, v : \type{LocalVar}$)}
+\label{alg:InsertLocalVariable}
+\begin{algorithmic}[1]
+\REQUIRE Java
+\ENSURE Java $\cup$ locked names
+\medskip
+\STATE $b \leftarrow \text{enclosing block of $s$}$
+\STATE \assert variable $v$ can be introduced into block $b$
+\STATE $\util{lockNames}(b, n)$
+\STATE insert $v$ before $s$
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{\refactoring{Extract Assignment}}
+This refactoring extracts an expression into an assignment to a local variable. Implemented in \sourcelink{ExtractTemp/ExtractAssignment.jrag}.
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Extract Assignment}(v : \type{LocalVar}, e : \type{Expr}) : \type{Assignment}$}
+\label{alg:ExtractAssignment}
+\begin{algorithmic}[1]
+\REQUIRE Java
+\ENSURE Java $\cup$ locked dependencies
+\medskip
+\STATE \assert $e$ is extractible
+\STATE $a \leftarrow \text{new assignment from $e$ to $v$}$
+\IF{$e$ is in expression statement}
+  \STATE replace $e$ with $a$
+\ELSE
+  \STATE $s \leftarrow \text{enclosing statement of $e$}$
+  \STATE lock all names in $e$
+  \STATE insert $a$ before $s$
+  \STATE replace $e$ with locked access to $v$
+\ENDIF
+\RETURN $a$
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{\refactoring{Merge Variable Declaration}}
+This refactoring merges a variable declaration with the assignment immediately following it, if that assignment is an assignment to the same variable. Implemented in \sourcelink{ExtractTemp/MergeVarDecl.jrag}.
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Merge Variable Declaration}(v : \type{LocalVar})$}
+\label{alg:MergeVariableDeclaration}
+\begin{algorithmic}[1]
+\REQUIRE Java $\setminus$ multi-declarations
+\ENSURE Java
+\medskip
+\IF{$v$ has initialiser}
+  \RETURN
+\ENDIF
+\STATE $s \leftarrow \text{statement following v}$
+\IF{$s$ is assignment to $v$}
+  \STATE make RHS of $s$ the initialiser of $v$
+  \STATE remove $s$
+\ENDIF
+\end{algorithmic}
+\end{algorithm}

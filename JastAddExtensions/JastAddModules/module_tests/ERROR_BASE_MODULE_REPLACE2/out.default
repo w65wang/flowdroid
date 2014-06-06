@@ -1,0 +1,3 @@
+Unrecoverable semantic error(s) found.
+m1.module:5,20:
+  Semantic Error: Module used for replacement is a base module or is accessed through a base module. Only import owns are allowed to be used for a replace.

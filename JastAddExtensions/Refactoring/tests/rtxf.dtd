@@ -1,0 +1,60 @@
+<!-- RTXF: refactoring test exchange format -->
+<!ELEMENT testsuite (testcase)*>
+<!ATTLIST testsuite name CDATA #REQUIRED>
+
+<!ELEMENT testcase (refactoring, program, result)>
+<!ATTLIST testcase name CDATA #REQUIRED
+	           comment CDATA "">
+
+<!ELEMENT refactoring (extract_block|extract_class|extract_constant|rename)>
+
+<!ELEMENT extract_block (stmtref, stmtref)>
+
+<!ELEMENT extract_class (typeref)>
+<!ATTLIST extract_class classname CDATA #REQUIRED
+	                fieldname CDATA #REQUIRED
+	                fields    NMTOKENS #REQUIRED
+	                encapsulate (yes | no) "yes"
+	                toplevel  (yes | no) "no">
+
+<!ELEMENT extract_constant (expref)>
+<!ATTLIST extract_constant name CDATA #REQUIRED>
+
+<!ELEMENT rename (pkgref | typeref | methodref | fieldref | tempref)>
+<!ATTLIST rename newname CDATA #REQUIRED>
+
+<!ELEMENT pkgref EMPTY>
+<!ATTLIST pkgref name CDATA #REQUIRED>
+
+<!ELEMENT typeref EMPTY>
+<!ATTLIST typeref name CDATA #REQUIRED>
+                  
+<!ELEMENT methodref EMPTY>
+<!ATTLIST methodref host CDATA #REQUIRED
+                    signature CDATA #REQUIRED>
+
+<!ELEMENT fieldref EMPTY>
+<!ATTLIST fieldref host CDATA #REQUIRED
+	           name CDATA #REQUIRED>
+
+<!ELEMENT tempref EMPTY>
+<!ATTLIST tempref host CDATA #REQUIRED
+	          name CDATA #REQUIRED>
+
+<!ELEMENT stmtref EMPTY>
+<!ATTLIST stmtref after CDATA #IMPLIED
+	          before CDATA #IMPLIED>
+
+<!ELEMENT expref EMPTY>
+<!ATTLIST expref after CDATA "/*[*/"
+	         before CDATA "/*]*/">
+
+<!ELEMENT program (cu+ | typedecl+ | bodydecl+ | stmt+)>
+<!ELEMENT cu (#PCDATA)>
+<!ELEMENT typedecl (#PCDATA)>
+<!ELEMENT bodydecl (#PCDATA)>
+<!ELEMENT stmt (#PCDATA)>
+<!ATTLIST cu name CDATA #REQUIRED>
+
+<!ELEMENT result (program)*>
+<!ATTLIST result mayfail (yes | no) "no">

@@ -1,0 +1,129 @@
+aspect ASTParsing {
+
+  refine ASTGrammar private void Program.loadASTFile(String name) {
+    try {
+      FileInputStream is = new FileInputStream(name);
+      org.jastadd.plugin.jastadd.scanner.JavaScanner scanner = new org.jastadd.plugin.jastadd.scanner.JavaScanner(new scanner.Unicode(is));
+      scanner.enterJastAdd();
+      CompilationUnit cu = (CompilationUnit)new org.jastadd.plugin.jastadd.parser.JavaParser().parse(scanner, org.jastadd.plugin.jastadd.parser.JavaParser.AltGoals.ast_file);
+      scanner.previousState();
+      is.close();
+
+      List importList = cu.getImportDeclList();
+      for(int i = 0; i < cu.getTypeDeclList().getNumChild(); i++) {
+      
+ 		// All new nodes which have had other parents need to get their state from
+ 		// the Program node to make sure it's the same all over the tree
+        CompilationUnit unit = new CompilationUnit();
+        unit.setOffsets(scanner.offsets());
+        changeStateInNode(unit,state());
+        unit.setPackageDecl(cu.getPackageDecl());
+        
+        List listCopy = (List)importList.fullCopy();
+        changeStateInNode(listCopy, state());
+        unit.setChild(listCopy,0);
+        
+        TypeDecl typeDecl = (TypeDecl)cu.getTypeDeclList().getChildNoTransform(i);
+        changeStateInNode(typeDecl, state());
+        unit.setChild(new List().add(typeDecl), 1);
+        
+        unit.setFromSource(true);
+        unit.setRelativeName(name);
+        unit.setPathName(name);
+        // Add a suffix to the lookup name
+        unit.setPostLookupKey("#"+i);
+        addCompilationUnit(unit);
+      }
+    } catch (Exception e) {
+      throw new Error(e.getMessage());
+    }
+  }
+  
+  private void Program.loadASTFile(String name, String contents) {
+    try {
+      java.io.InputStream is = new java.io.ByteArrayInputStream(contents.getBytes());
+      org.jastadd.plugin.jastadd.scanner.JavaScanner scanner = new org.jastadd.plugin.jastadd.scanner.JavaScanner(new scanner.Unicode(is));
+      scanner.enterJastAdd();
+      CompilationUnit cu = (CompilationUnit)new org.jastadd.plugin.jastadd.parser.JavaParser().parse(scanner, org.jastadd.plugin.jastadd.parser.JavaParser.AltGoals.ast_file);
+      scanner.previousState();
+      is.close();
+
+      List importList = cu.getImportDeclList();
+      for(int i = 0; i < cu.getTypeDeclList().getNumChild(); i++) {
+      
+       	// All new nodes which have had other parents need to get their state from
+ 		// the Program node to make sure it's the same all over the tree
+        CompilationUnit unit = new CompilationUnit();
+        unit.setOffsets(scanner.offsets());
+        changeStateInNode(unit,state());
+        unit.setPackageDecl(cu.getPackageDecl());
+        
+        List listCopy = (List)importList.fullCopy();
+        changeStateInNode(listCopy, state());
+        unit.setChild(listCopy, 0);
+        
+        TypeDecl typeDecl = (TypeDecl)cu.getTypeDeclList().getChildNoTransform(i);
+        changeStateInNode(typeDecl, state());
+        unit.setChild(new List().add(typeDecl),1);
+
+        unit.setFromSource(true);
+        unit.setRelativeName(name);
+        unit.setPathName(name);
+        // Add a suffix to the lookup name
+        unit.setPostLookupKey("#"+i);
+        addCompilationUnit(unit);
+      }
+    } catch (Exception e) {
+      throw new Error(e.getMessage());
+    }
+  }
+  
+  protected void ASTNode.changeStateInNode(ASTNode node, ASTNode$State state) {
+    node.state = state;
+  }
+  
+  refine JastAddJCompile public void Program.addSourceFile(String name, String contents) {
+  	if (name.endsWith("ast")) {
+  		loadASTFile(name, contents);
+  	} else {
+  		JastAddJCompile.Program.addSourceFile(name, contents);
+  	}
+  }
+  
+  
+  syn boolean CompilationUnit.isFromASTFile() = relativeName().endsWith("ast");
+    
+  inh ArrayList CompilationUnit.collectRelatedASTDecls(String relativeName);
+  eq Program.getCompilationUnit(int i).collectRelatedASTDecls(String relativeName) {
+  	ArrayList list = new ArrayList();
+  	for (Iterator iter = getCompilationUnits().iterator(); iter.hasNext();) {
+  		CompilationUnit unit = (CompilationUnit)iter.next();
+  		String name = unit.relativeName();
+  		if (name != null && name.equals(relativeName)) {
+  			for (Iterator iter2 = unit.getTypeDecls().iterator(); iter2.hasNext();) {
+  				list.add(iter2.next());
+  			}
+  		}
+  	}
+  	return list;
+  }
+  
+  
+  /*
+   * Fix to get rid of stack overflow problems
+   */
+  refine ImplicitConstructor eq List.requiresDefaultConstructor() {
+      if (getParent() instanceof ASTDecl) {
+       return false;
+     } 
+     if(getParent() instanceof ClassDecl) {
+       ClassDecl c = (ClassDecl)getParent();
+       return c.getBodyDeclList() == this && !(c instanceof AnonymousDecl) && c.noConstructor();
+     }
+     return false;
+  }
+  
+
+
+}
+

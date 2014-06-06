@@ -1,0 +1,3 @@
+Unrecoverable semantic error(s) found.
+M1.module:3,8:
+  Semantic Error: Unable to find module: NonExistent

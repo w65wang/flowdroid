@@ -1,0 +1,10 @@
+
+aspect JAModuleGenerateIntertypeDecls {
+	//from InterTypeDeclarations/IntertypeDecls
+	public void CompilationUnit.generateIntertypeDecls() {
+		super.generateIntertypeDecls();
+	}
+	public void ModuleCompilationUnit.generateIntertypeDecls() {
+		//Do nothing, the children will be traversed by compilationUnitIterator
+	}
+}

@@ -1,0 +1,23 @@
+See Fig.~\ref{fig:node types}. We also use the non-node type \type{Name} to represent names.
+
+\begin{figure}[hb]
+\begin{center}
+\begin{tabular}{|l|p{5cm}|}
+\hline
+\textbf{Node Type} & \textbf{Description} \\ \hline\hline
+\type{ClassOrInterface} & either a class or an interface; is a \type{Type} \\
+\type{Field} & field declaration \\
+\type{LocalVar} & local variable declaration \\
+\type{MemberType} & type declared inside another type; is a \type{Type} \\
+\type{Method} & method declaration \\
+\type{MethodCall} & method call \\
+\type{Package} & package \\
+\type{Type} & type declaration \\
+\type{VirtualMethod} & non-\code{private} instance method; is a \type{Method} \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Node Types}
+\label{fig:node types}
+\end{figure}
+

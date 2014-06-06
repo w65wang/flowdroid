@@ -1,0 +1,96 @@
+import jastaddmodules.*;
+aspect CollectLocalModulePackages {
+	//TODO: return type is just so that I can use syn lazy on the MCU method
+	public void Program.collectLocalModulePackages() {
+		List<CompilationUnit> cuList = getCompilationUnitList();
+		for (CompilationUnit cu : cuList) {
+			cu.collectLocalModulePackages();
+		}
+	}
+	protected boolean ModuleCompilationUnit.packagesCollected = false;
+	public void ModuleCompilationUnit.collectLocalModulePackages() {
+		//if superinstance, skip
+		if (isSuperInstance()) {
+			return;
+		}
+		//if packages already collected, skip
+		if (this.packagesCollected) {
+			return; 
+		}
+
+		//collect packages from member cus and supers
+		ModuleCompilationUnit currMCU = this;
+		while (currMCU != null) {
+			for (CompilationUnit cu : currMCU.getCompilationUnitList()) {
+				cu.collectLocalModulePackages();
+			}
+			currMCU = currMCU.getSuperInstance();
+		}
+		
+		//process export declarations (for non-interface mcu only)
+		if (!isModuleInterface() && !isSuperInstance() && isModuleInstantiated()) {
+			LinkedList<ModuleMemberDecl> memberList = getSelfAndSuperMemberListNoTransform();
+			for (ModuleMemberDecl member : memberList) {
+				if (!(member instanceof ModuleExportDecl)) {
+					continue;
+				}
+				ModuleExportDecl exportDecl = (ModuleExportDecl) member;
+				//TODO: Refactor to remove instanceof test
+				if (exportDecl instanceof ModuleExportAllDecl) {
+					currMCU = this;
+					while (currMCU != null) {
+						for (String localPackageName: currMCU.getLocalPackageMap().keySet()) {
+							currMCU.getLocalPackage(localPackageName).setExported(true);
+						}
+						currMCU = currMCU.getSuperInstance();
+					}
+					break; //ignore all other export decls
+				}
+				for (ModulePackageDecl modulePackageDecl : exportDecl.getModulePackageDeclList()) {
+					String localPackageName = modulePackageDecl.getID();
+					LocalModulePackage localPackage = getLocalPackageWithSuper(localPackageName);
+					if (localPackage == null) {
+						modulePackageDecl.error("Package " + localPackageName + " is exported but there are no types in the module that are a member of that package.");
+					} else {
+						localPackage.setExported(true);
+					}
+				}
+			}
+		}
+		
+		//TODO: Add packages to Program.packageToMCU
+		currMCU = this;
+		while (currMCU != null) {
+			for (String localPackageName : currMCU.getLocalPackageMap().keySet()) {
+				LocalModulePackage localPackage = currMCU.getLocalPackage(localPackageName);
+				String globalPackageName = currMCU.makeGlobalPackageName(localPackageName, localPackage);
+				currMCU.getHostProgram().addPackageToMCU(globalPackageName, this);
+			}
+			currMCU = currMCU.getSuperInstance();
+		}
+		this.packagesCollected = true;
+	}
+	
+	public void CompilationUnit.collectLocalModulePackages() {
+		ModuleCompilationUnit mcu = getModuleCompilationUnit();
+		if (mcu != null) {
+			if (mcu.getLocalPackage(moduleLocalPackageName()) == null) {
+				mcu.addLocalPackage(moduleLocalPackageName(), new LocalModulePackage(false));
+			}
+		}
+	}
+	
+	//map needed to refine AccessControl.TypeDecl.accessibleFromPackage
+	protected HashMap<String, ModuleCompilationUnit> Program.packageToMCU = new 
+		HashMap<String, ModuleCompilationUnit>();
+	public void Program.addPackageToMCU(String packageName, ModuleCompilationUnit mcu) {
+		assert (errorsFound() || this.packageToMCU.get(packageName) == null) : 
+			"Duplicate entry already in Program.packageToMCU: " + 
+			packageName + ", " + mcu.getModuleName() + " : " + this.packageToMCU.get(packageName).getModuleName();
+		packageToMCU.put(packageName, mcu);
+	}
+	public ModuleCompilationUnit Program.getPackageToMCU(String packageName) {
+		return packageToMCU.get(packageName);
+	}
+	
+}

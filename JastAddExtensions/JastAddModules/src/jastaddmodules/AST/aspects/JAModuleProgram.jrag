@@ -1,0 +1,19 @@
+
+aspect JAModuleProgram {
+
+	public static final String Program.SUPERMODULE_KEYWORD = "supermodule";
+
+	protected boolean Program.moduleProcessingComplete = false;
+	public boolean Program.isModuleProcessingComplete() {
+		return moduleProcessingComplete;
+	}
+	public void Program.setModuleProcessingComplete(boolean b) {
+		moduleProcessingComplete = b;
+	}
+	
+	eq Program.getChild(int index).getHostProgram() = this;
+	inh Program CompilationUnit.getHostProgram();
+	inh Program ModuleDecl.getHostProgram();
+	inh Program ModuleExpr.getHostProgram();
+	
+}

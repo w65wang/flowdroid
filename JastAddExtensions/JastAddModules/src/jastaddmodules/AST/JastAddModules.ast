@@ -1,0 +1,52 @@
+ModuleCompilationUnit : CompilationUnit ::= 
+	ModuleDecl 
+	ModuleMemberDecl* 
+	CompilationUnit*; //CompilationUnit is the list of compilation units that are members of 
+					//this module. These are not filled in at parse time, they are added at 
+					//InsertModuleCUs 
+
+ModuleAccess : Access ::= <ID:String>;
+NullModuleAccess : ModuleAccess; //sentinel value, matches no module
+ModuleDecl ::= ModuleAccess [Extends:ModuleAccess] Implements:ModuleAccess* Overrides:ModuleAccess*;
+InterfaceModuleDecl : ModuleDecl ::= ; //refactor to inherit from abstract module decl if time permits
+WeakInterfaceModuleDecl : InterfaceModuleDecl ::=;
+
+abstract ModuleMemberDecl;
+ModuleImportDecl : ModuleMemberDecl ::= 
+	ModuleImportType //this is own, or the empty string for a normal import
+	ImportModule:ModuleAccess
+	AsType
+	AsModule:ModuleAccess; //if no export, then set to NullModuleAccess 
+ImplicitModuleImportDecl : ModuleImportDecl ::=; // for implicit imports (jastadd$framework)
+
+abstract ModuleImportType; //just a type to distinguish the method of import
+ModuleImportTypeNorm : ModuleImportType;
+ModuleImportTypeOwn : ModuleImportType;
+abstract AsType; //same here, determines the type of the merge as
+AsTypeOwn : AsType;
+AsTypeExport : AsType; 
+AsTypeNone : AsType;
+
+ModuleMergeDecl : ModuleMemberDecl ::= 
+	MergeModule:ModuleAccess* 
+	AsType 
+	AsModuleStaticType:ModuleAccess
+	AsModule:ModuleAccess;
+ModuleReplaceDecl : ModuleMemberDecl ::=
+	ReplaceModule:ModuleAccess*
+	WithExpr:ModuleExpr;
+
+//for use in the with clause of replacedecl
+abstract ModuleExpr;
+ModuleAccessExpr : ModuleExpr ::= ModuleAccess;
+ModuleSingletonAccessExpr : ModuleExpr ::= ModuleAccess;
+ModuleOwnExpr : ModuleExpr ::= ModuleAccess;
+
+
+ModuleExportDecl : ModuleMemberDecl ::=
+	ModulePackageDecl*;
+ModuleExportAllDecl : ModuleExportDecl ::=;
+
+ModulePackageDecl ::= <ID:String>;
+
+ModuleDot : Dot;

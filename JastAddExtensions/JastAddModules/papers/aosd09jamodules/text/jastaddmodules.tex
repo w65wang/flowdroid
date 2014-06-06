@@ -1,0 +1,580 @@
+The previous section has shown that while ITD implementations are generally
+cleaner and require less ahead-of-time planning to allow extensibility, they
+are still limited by their global scope: two versions of the same ITD cannot
+exist in the same system. We now propose to remedy this problem by introducing
+an aspect-aware module system that allows for multiple instances of classes
+to exist, each instance modified by a particular version of the ITDs.
+
+The module system is based on the object-oriented java module system 
+presented in \textit{Modules as Object-Oriented Types}\cite{modulesastypes},
+and the aspect-oriented features are provided by Jast\-Add\cite{jastadd, jastaddjavacompiler}, 
+an aspect-oriented compiler framework. Jast\-Add uses the same ITD 
+syntax as in AspectJ, and should therefore be familiar to the expected audience
+of this paper.
+
+\subsection{Module System Overview}
+
+A module consists of aspects and classes, and defines the set of external
+modules that are visible to the module's members. 
+A module is considered to be the type of the collection of classes and aspects
+that belong to it. The module system allows the instantiation these module types
+within the context of an importing module, defines a subtyping relation
+on module types, and a merge operation to manipulate module instances.
+
+The remainder of this section goes into the details of the module system, and shows
+how it can be used the enhance the ITD solution to the calculator 
+presented in Section~\ref{section:itdvisitors}.
+
+\subsection{Declaration and Membership}
+
+A module is defined in a \texttt{.module} file, and is headed by the module's name:
+
+\begin{lstlisting}[caption={Module Declaration}]
+//file prettyprinter.module
+module prettyprinter;
+...
+\end{lstlisting}
+
+Membership to a module is defined in the compilation unit of the members,
+similar to a package declaration:
+
+\begin{lstlisting}[caption={Module Membership}]
+//file Print.jrag
+module prettyprinter; //module membership
+public aspect Print {
+	public abstract String Expr.print();
+	
+	public String Add.print() {
+		return getLeft().print() + 
+				"+" + getRight().print();
+	}
+	
+	public String IntLit.print() {
+		return getIntLit().toString();
+	}
+}
+
+//file Expr.java
+module asttypes; //module membership
+package expr; //package declaration
+public class Expr {
+...
+}
+\end{lstlisting}
+
+Module and package declarations can coexist in a single compilation unit.
+Modules can contain aspects and classes that span multiple packages.
+
+\subsection{Module Access Control}
+
+Packages are not implicitly visible outside the module unless an
+\texttt{export} declaration is provided for that package. These declarations
+are placed in \texttt{.module} files.
+
+\begin{lstlisting}[caption={Export Package}]
+//file asttypes.module
+module asttypes;
+export package expr, stmt; //export expr and stmt
+...
+
+//file prettyprinter.module
+module prettyprinter;
+export package *; //export all packages
+...
+\end{lstlisting}
+
+As the example shows, an export package may contain a list of packages, or the
+wildcard \texttt{*}, which exposes all packages in the module. Any types that
+belong to a package that is not exported are not visible from outside the module.
+
+The module system also introduces the module-private access modifier \textbf{module},
+which allows access to a type, method or field from the within the same module. This
+allows more fine-grained control over the set of publicly accessible types of a module.
+
+\begin{lstlisting}
+//file Expr.java
+module asttypes;
+//only visible from module asttypes
+module class Expr {
+	//only visible from module asttypes
+	module int moduleField;
+	module void moduleMethod() {...}
+}
+\end{lstlisting}
+
+\subsection{Imports and Instantiation}
+
+Module definitions also contain import declarations, which specify which
+other modules are visible to the members of the module. A module imports 
+an \textit{instance} of another module, which allows multiple instances
+of the same module to exist within a single context.
+
+An import in a module declaration creates a typed module reference which is pointed to
+an instance of that module type. 
+There are two ways to import a module instance: importing the singleton or
+an \textbf{own} instance. Imports may also be aliased to allow multiple instances
+of the same module to exist in the same context, and be exported so that
+they are also accessible through indirection from other modules.
+
+\begin{lstlisting}[caption={Imports}, label={figure:imports}]
+//file prettyprinter.module
+module prettyprinter;
+//import the singleton instance of module parserframework
+import parserframework; 
+//import an own instance of the module asttypes
+import own asttype;
+//import another instance of asttype, using an alias and export
+import own asttype export as public_ast;
+\end{lstlisting}
+
+Imports of \textbf{own} instances without an explicit alias use the name
+of the imported module as its alias. To be more specific, line 6 from the above
+example is equivalent to
+\begin{lstlisting}
+import own asttype as asttype;
+\end{lstlisting}
+
+Import cycles involving \textbf{own} instances are not allowed as they
+lead to infinite module instance creation. Import cycles involving only
+singleton instances, however, are allowed.
+
+An aspect can only introduce ITDs to types that are visible from its parent module. 
+This allows the use of module imports and access modifiers to control dependencies
+caused by ITDs.
+
+Importing the singleton module allows different modules to share the same instance
+of the same module type. This allows the sharing of classes across modules, as
+classes that belong to different instances of a module are not type compatible.
+In the presence of the \textbf{merge} operator (described later), a singleton import
+also ensures that the imported module is an unmodified version of the base module type.
+
+The visibility of imported modules become important for module qualifiers and the \textbf{merge} operation, described later.
+
+\subsection{Module Qualified Type Accesses}
+
+Allowing two instances of the same module to exist in the same context
+requires a way to disambiguate references to the members of the instances.
+We introduce \textit{module qualifiers} for type references to explicitly
+choose the module to which the type belongs.
+
+A module qualified type access takes this form:
+
+\begin{lstlisting}
+modulealias::packagename.TypeName
+\end{lstlisting}
+
+The following example uses the module definition from listing \ref{figure:imports}.
+The module \texttt{prettyprinter} imports two instances of \texttt{asttype}, with the
+aliases \texttt{asttype} and \texttt{public\_ast}. The aspect \texttt{Print},
+which belongs to the module, introduces ITDs to each of the \texttt{Add} types
+of the instances.
+
+\begin{lstlisting}[caption={Module Qualifiers}]
+//file Print.jrag
+module prettyprinter;
+aspect Print {
+	...
+	//modifies the Add type in asttypes
+	public String asttypes::Add.print() {
+		//infix print
+		return getLeft().print() + "+" + 
+				getRight().print();
+	}
+	...
+	//modifies the Add type in public_ast
+	public String public_ast::Add.print() {
+		//postfix print
+		return getLeft().print() + 
+				getRight().print() + "+";
+	}
+}
+\end{lstlisting}
+
+Module qualifiers also allow for indirection. A module can be accessed 
+through its importing module if it was exported. A type access
+that uses module indirection takes the form:
+
+\begin{lstlisting}
+modulealias1::modulealias2::packagename.TypeName
+\end{lstlisting}
+
+The following example
+shows a small system consisting of the modules \texttt{scanner}, 
+\texttt{parser} and \texttt{parserapp}. The parser module imports
+the scanner module, and the parser application module imports the
+parser. The parser application module then adds an ITD to the classes
+\texttt{Scanner} and \texttt{Parser}, which are members of the scanner
+and parser modules respectively. The import statements in the 
+\texttt{ParserApp.jrag} file in the example are normal java import
+statements, to demonstrate that module qualifiers are also allowed
+for that language construct.
+
+\begin{lstlisting}
+//file scanner.module
+module scanner;
+export package *;
+...
+
+//file parser.module
+module parser;
+//allow access to imported scanner
+import own scanner export as scanner;
+export package *;
+...
+
+//file parserapp.module
+module parserapp;
+import own parser;
+...
+
+//file ParserApp.jrag
+module parserapp;
+//module qualifiers are also supported in normal
+//java import statements
+//from the direct import parser
+import parser::Parser;
+//indirect through parser to get scanner
+import parser::scanner::Scanner;
+
+aspect ParserApp {
+	//add an ITD to the direct import parser
+	private App Parser.parentApp;
+	public void Parser.setParentApp(App app) {...}
+	//add an ITD to the indirect import scanner
+	private App Scanner.parentApp;
+	public void Scanner.setParentApp(App app) {...}
+}
+\end{lstlisting}
+
+\subsection{Extension}
+
+The module system in \cite{modulesastypes} introduced the concept of
+module extension and class overriding, where a class in a subtype module
+overrides a class of the same name in the supertype module to satisfy the 
+open/closed principle for modules.
+
+A subtype module declaration takes the form
+\begin{lstlisting}
+module m2 extends m1;
+\end{lstlisting}
+where \texttt{m1} is another module in the compilation. The subtype module
+inherits all the aspects and classes of the supertype module, and can override
+them as well by declaring an aspect or class with the same package and type name.
+As with the module system in \cite{modulesastypes}, a subtype module also inherits
+the imports and export package declarations of its supertype module.
+
+The usual rules for Java inheritance also apply for module subtyping: single 
+inheritance only, and no subtyping cycles.
+
+We extend this to aspects and ITDs, specifying that an aspect in a subtype module
+overrides an aspect of the same name in the supertype module. This effectively
+replaces all ITDs in the overridden module.
+
+In the following example, we have two parser modules \texttt{parserv1} and \texttt{parserv2},
+with the latter being a subtype of the former. The module \texttt{parserv2} inherits
+the class \texttt{Program}, while overriding the aspect \texttt{ParseClassFile}. The
+application module can then use instances of both modules, with the ITD \texttt{Program.parseClassFile}
+being appropriately different for each version.
+
+\begin{lstlisting}
+//file parserv1.module
+module parserv1;
+...
+
+//file Program.java
+//base class, inherited by parserv2
+module parserv1;
+public class Program {...}
+
+//file ParserClassFilev1.jrag
+//version 1 parser
+module parserv1;
+aspect ParseClassFile {
+	public void Program.parseClassFile(String file) {...}
+}
+
+//file parserv2.module
+module parserv2 extends parserv1;
+...
+
+//file ParserClassFilev2.jrag
+module parserv2;
+//has the same name as parserv1::ParseClassFile, 
+//overrides that aspect when parserv2 is instantiated
+aspect ParseClassFile {
+	public void Program.parserClassFile(String file) {...}
+}
+
+//file multiversion.module
+//a multi-version parser that supports both versions
+module multiversion;
+import own parserv1;
+import own parserv2;
+...
+
+//file MultiVersion.java
+module multiversion;
+public class MultiVersion {
+	...
+	//version1 parser
+	parserv1::Program progv1 = ...;
+	//version2 parser
+	parserv2::Program progv2 = ...;
+	
+	//parse depending on version
+	void parseClassFile(String file) {
+		if (version1) {
+		  //this invokes the ITD method introduced in parserv1
+			progv1.parseClassFile(file)
+		} else if (version2) {
+			//while this invokes the parserv2 ITD method
+			progv2.parseClassFile(file)
+		}
+	}
+}
+\end{lstlisting}
+
+It should be noted that even though the class \texttt{Program}
+is inherited by \texttt{parserv2}, the type
+\texttt{parserv2::Program} is different from \texttt{parserv1::Program}. Moreover,
+these two types are not type compatible.
+
+\subsection{Merge}
+
+Types that belong to different module instances, even if they have the same
+base module type, are not type compatible. Though type sharing can be done
+by using singleton instances, this is limited in its usefulness, as the singleton
+instance may have imported \textbf{own} instances of another module that you wish to
+share.
+
+For these circumstances the module system provides the \textbf{merge} operation,
+which targets a set of module references and points them to a new \textbf{own} instance
+of a module that is compatible with the types of the references in the set. A merge
+declaration has the form
+
+\begin{lstlisting}
+merge m1, m2, m3::m4 [export] as newtype alias;
+\end{lstlisting}
+
+The merge declaration above points the module references \texttt{m1}, \texttt{m2} and
+\texttt{m3::m4} to a new module instance of type \texttt{newtype}, while also creating a
+new module reference \texttt{alias} in the module that contained the merge declaration. 
+The old instances that were pointed to by the references are deallocated if there are no
+other references that also point to the instance.
+
+Merge declarations also cascade: if the module reference \texttt{alias} were used as a target in
+another merge declaration:
+
+\begin{lstlisting}
+merge m5, alias as newtype2 alias2;
+\end{lstlisting}
+
+then the targets of the previous merge \texttt{m1}, \texttt{m2} and \texttt{m3::m4} will also
+be pointed to the new instance of \texttt{newtype2}. 
+
+Once a reference is used in a merge, however,
+it cannot be used as a target in another merge declaration. This enforces the condition that
+all the targets of a merge declaration point to the same instance, regardless of any future merge
+declarations.
+
+In the merge above, \texttt{newtype} must be type compatible with all of the target references
+in the list; that is, it must be the same type as or is a subtype of the types of the module
+references. In addition, merge allows the use of module references that have indirection. This allows 
+an importing module to change the dependencies of an imported module so it can share types with
+that module. 
+
+However, module references that indirect through a singleton module are not allowed to
+be a target in a merge declaration. This keeps the unmodified state of the singleton module
+instance, preserving any assumptions of other modules about the dependencies of the singleton.
+
+The following example demonstrates how merge is used to share types between modules. The example
+shows a basic compiler application, with a \texttt{frontend} module, a \texttt{backend} module
+and a \texttt{compilerapp} module. It also contains an extension to the frontend, the module 
+\texttt{frontendext}. The compiler application would require a frontend and a backend. 
+However, it uses the extended frontend \texttt{frontendext}. In order for the backend and the
+compiler application to share the frontend types, the merge in line 21 merges the backend's
+frontend import with \texttt{compilerapp}'s frontend extension import. This changes the backend's
+dependency, now pointing it to the extended frontend, which is the same instance as that pointed
+to by \texttt{compilerapp}'s reference to \texttt{frontendext}.
+
+
+\begin{lstlisting}[caption={Merge}]
+//file frontend.module
+module frontend;
+...
+
+//file backend.module
+module backend;
+import own frontend export as frontend;
+...
+
+//file frontendext.module
+module frontendext extends frontend;
+...
+
+//file compilerapp.module
+module compilerapp;
+import own frontendext;
+import own backend;
+//merges the compilerapp's frontendext import 
+//with the backend's frontendext import. Is possible
+//since frontendext extends frontend
+merge frontendext, backend::frontend as frontendext frontendext;
+...
+\end{lstlisting}
+
+\subsection{ITD Calculator with Modules}
+
+As already shown in section \ref{section:itdvisitors}, while ITD implementations
+are generally cleaner than visitor implementations due to the lack of framework code,
+it is not possible to have versions of the original and the refined
+ITDs in the same system, as aspect precedence and scope are global. Since modules
+allow for multiple instances of classes to exist, we can use them to allow for
+non-destructive ITD extension. 
+
+We take the example given in section \ref{section:itdvisitors} and include them in a module system.
+All of the base classes and aspects belong to the module \texttt{calculator}, while the extensions
+are placed in the module \texttt{calculatorsub}, which extends \texttt{calculator}. Note that
+aspect overriding is used to change the behavior of \texttt{Int.print()} in the subtype module.
+We have also added a facade class \texttt{CalcFacade} to the calculator, which will be used
+in the application example shown later.
+
+\begin{lstlisting}[caption={ITD Base and Extension with modules}]
+//base files
+//file calculator.module
+module calculator;
+export package *;
+
+//file Expr.java
+module calculator; //module membership
+public abstract class Expr {...}
+class Int extends Expr {...}
+class Add extends Expr {...}
+
+//file CalcFacade.java
+module calculator;
+public class CalcFacade {
+	public static Expr parse(String expr) {...}
+	public static int eval(Expr expr) {return expr.eval();}
+	public static String prettyPrint(Expr expr) {return expr.print();}
+}
+
+//file CalcAspects.jrag
+module calculator; //module membership
+aspect Eval {...}
+aspect Print {
+  String Int.print() {
+    return Integer.toString(value);
+  }
+  String Add.print() {
+    return left.print() + " + " + right.print();
+  }
+}
+
+//extension files
+//file calculatorsub.module
+module calculatorsub extends calculator;
+export package *;
+
+//file Sub.java
+module calculatorsub;
+class Sub extends Expr {...}
+
+//file CalcAspectsSub.jrag
+module calculatorsub;
+aspect ExtEval {
+  int Sub.eval() {
+    return left.eval() - right.eval();
+  }
+}
+//overrides the aspect calculator::Print
+aspect Print {
+  String Add.print() {
+    return left.print() + " + " + right.print();
+  }
+  //add the subtraction print
+  String Sub.print() {
+    return left.print() + " - " + right.print(); 
+  }
+  //change integer printing to word printing
+  String Int.print() {
+    .. convert i to the strings "one", "two", etc.
+  }
+}
+\end{lstlisting}
+
+The following listing shows how the both the base and extended 
+calculator modules can be used at the same time by a single application.
+We define a module \texttt{multicalc} which imports \texttt{own} instances
+of \texttt{calculator} and \texttt{calculatorsub}. The module also
+contains the application class \texttt{MultiCalc}, which shows how
+to use the two calculator versions in a single system.
+
+\begin{lstlisting}[caption={Using the ITD Calculator}]
+//An application that uses both versions of calculator
+//file multicalc.module;
+module multicalc;
+import own calculator;
+import own calculatorsub;
+
+//file MultiCalc.java
+module multicalc;
+public class MultiCalc {
+	public void print(String expr) {
+		String output;
+		if (base) {
+			//uses the base classes and aspects
+			calculator::Expr expr = 
+					calculator::CalcFacade.parse(expr);
+			output = calculator::CalcFacade.prettyPrint(expr);
+		} else if (extended} {
+			//uses the extended classes and aspects
+			calculatorsub::Expr expr = 
+					calculatorsub::CalcFacade.parse(expr);
+			output = calculatorsub::CalcFacade.prettyPrint(expr);
+		}
+		System.out.println(output);
+	}
+}
+\end{lstlisting}
+
+\subsection{Evaluation}
+
+The addition of modules to the ITD implementation allows the use of both the base
+and extended versions of the \texttt{Int.print()} method. This gives ITD implementations
+a greater level of extensibility without explicit use of ITD refinements, which are
+the norm for Jast\-Add. However, this comes at the cost of maintaining parallel type 
+hierarchies for each version.
+
+An observant reader would have noticed that the aspect \texttt{calculatorsub::Print}
+also contains a reimplementation of the ITD \texttt{Add.print}. This is only required
+since Jast\-Add currently has no concept of aspect extension, and any modification to an
+aspect would require a reimplementation of the unmodified behavior. However, for languages
+that allow aspect subtyping, the refinement code could have been changed to
+
+\begin{lstlisting}[caption={Aspect Overriding with Subtyping}]
+aspect Print extends supermodule::Print {
+	//the Add.print ITD is inherited from the supermodule print
+  //add the subtraction print
+  String Sub.print() {
+    return left.print() + " - " + right.print(); 
+  }
+  //change integer printing to word printing
+  String Int.print() {
+    .. convert i to the strings "one", "two", etc.
+  }
+}
+\end{lstlisting}
+
+Indeed, the module system in \cite{modulesastypes} already allows this for Java classes, and
+we believe that implementing this for a more expressive AOP language such as AspectJ is possible.
+
+The module system, as with any good module system, also brings an architectural advantage to
+even the basic calculator example. Aspects are no longer just individual program transformations
+that have unstructured interdependencies, they now exist in the context of a module, and the
+\textbf{extend} relation between \texttt{calculator} and \texttt{calculatorsub} provides a way
+to classify the relation between their component aspects. The modules themselves serve as a filter
+to limit the scope of its component aspects to that of its members and imports, decreasing the
+chance of introducing unplanned dependencies to the system. These architectural advantages
+become more apparent in a larger system, and are explored further in the next section, which
+describes the use of the module system on a non-trivial Java compiler implemented in Jast\-Add.

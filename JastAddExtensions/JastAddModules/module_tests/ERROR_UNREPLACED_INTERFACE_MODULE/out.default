@@ -1,0 +1,4 @@
+m4int.module:1:
+  Semantic Error: Module interface m4int used in modules m3 is an interface and was not replaced with a non-interface module.
+m4int.module:1:
+  Semantic Error: Module interface m4int used in modules m3 is an interface and was not replaced with a non-interface module.

@@ -1,0 +1,6 @@
+aspect RefactoringYield {
+  eq YieldReturnStmt.mustDef(Variable v) = false;
+  eq YieldBreakStmt.mustDef(Variable v) = false;
+  eq GotoStmt.mustDef(Variable v) = false;
+  
+}

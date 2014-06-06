@@ -1,0 +1,29 @@
+aspect CheckModuleInterfaceContents {
+	public void ASTNode.checkModuleInterfaceContents() {}
+	public void ModuleCompilationUnit.checkModuleInterfaceContents() {
+		if (!isModuleInterface()) {
+			return;
+		}
+		//for now, interfaces should have no member decls (except package exports), and no member CUs
+		for (ModuleMemberDecl member : getModuleMemberDeclList()) {
+			if (!(member instanceof ModuleExportDecl)) {
+				getModuleDecl().error("Module interfaces must not have any imports, merges or replaces.");
+			}
+			if (member instanceof ModuleExportAllDecl) {
+				getModuleDecl().error("Module interfaces must not have an export all packages declaration.");
+			}
+		} 
+		if (getCompilationUnitList().getNumChild() > 0) {
+			String fileList = "";
+			boolean first = true;
+			for (CompilationUnit cu : getCompilationUnitList()) {
+				if (!first) {
+					fileList += ", ";
+				}
+				fileList += cu.relativeName();
+				first = false;
+			}
+			getModuleDecl().error("Module interfaces should have no member compilation units. Offending files: " + fileList);
+		}
+	}
+}

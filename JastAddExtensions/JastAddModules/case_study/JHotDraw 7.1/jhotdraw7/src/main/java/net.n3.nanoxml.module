@@ -1,0 +1,2 @@
+module_interface net.n3.nanoxml;
+export package net.n3.nanoxml;

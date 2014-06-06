@@ -1,0 +1,516 @@
+/*
+ * some extensions to ease testing
+ */
+
+aspect Testing {
+	
+	public Program Frontend.getProgram() {
+		return program;
+	}
+	
+	// sort compilation units alphabetically before printing; this helps when comparing results
+	refine PrettyPrint public void Program.toString(StringBuffer s) {
+		ArrayList<CompilationUnit> cus = new ArrayList<CompilationUnit>();
+		for(Iterator<CompilationUnit> iter = compilationUnitIterator(); iter.hasNext();) {
+			CompilationUnit cu = iter.next();
+			if(cu.fromSource())
+				cus.add(cu);
+		}
+		Collections.sort(cus, new Comparator<CompilationUnit>() {
+			public int compare(CompilationUnit cu1, CompilationUnit cu2) {
+				String id1 = cu1.getPackageDecl() + "." + cu1.getID();
+				String id2 = cu2.getPackageDecl() + "." + cu2.getID();
+				return id1.compareTo(id2);
+			} 
+		});  
+		for(CompilationUnit cu : cus)
+			cu.toString(s);
+	}
+	
+	syn String BodyDecl.ppID() = "";
+	eq ConstructorDecl.ppID() = name();
+	eq FieldDeclaration.ppID() = name();
+	eq MemberTypeDecl.ppID() = typeDecl().name();
+	eq MethodDecl.ppID() = name();
+	
+	refine PrettyPrint protected void TypeDecl.ppBodyDecls(StringBuffer s) {
+		ArrayList<BodyDecl> bds = new ArrayList<BodyDecl>();
+		for(int i=0;i<getNumBodyDecl();++i)
+			bds.add(getBodyDecl(i));
+		s.append("  {");
+		
+		java.util.List<BodyDecl> fields = new ArrayList<BodyDecl>();
+		java.util.List<BodyDecl> constrs = new ArrayList<BodyDecl>();
+		java.util.List<BodyDecl> methods = new ArrayList<BodyDecl>();
+		java.util.List<BodyDecl> other = new ArrayList<BodyDecl>(); // classes and interfaces
+		for (BodyDecl bd : bds) {
+			if (bd instanceof FieldDecl || 
+					bd instanceof FieldDeclaration || 
+					bd instanceof InstanceInitializer ||
+					bd instanceof StaticInitializer)
+				fields.add(bd);
+			else if (bd instanceof ConstructorDecl)
+				constrs.add(bd);
+			else if (bd instanceof MethodDecl)
+				methods.add(bd);
+			else
+				other.add(bd);
+		}
+		
+		for (BodyDecl bd : fields)
+			bd.toString(s);
+		
+		Collections.sort(constrs, new Comparator<BodyDecl>() {
+			//@Override
+			public int compare(BodyDecl o1, BodyDecl o2) {
+				return ((ConstructorDecl)o1).signature().compareTo(((ConstructorDecl)o2).signature());
+			}
+		});
+		for (BodyDecl bd : constrs)
+			bd.toString(s);
+		
+		Collections.sort(methods, new Comparator<BodyDecl>() {
+			//@Override
+			public int compare(BodyDecl o1, BodyDecl o2) {
+				MethodDecl p1 = (MethodDecl)o1;
+				MethodDecl p2 = (MethodDecl)o2;
+				return (p1.getTypeAccess() +"/"+ p1.signature()).compareTo(p2.getTypeAccess() +"/"+ p2.signature());
+			}
+		});
+		for (BodyDecl bd : methods)
+			bd.toString(s);
+		
+		Collections.sort(other, new Comparator<BodyDecl>() {
+			public int compare(BodyDecl o1, BodyDecl o2) {
+				String name1, name2;
+				if (o1 instanceof MemberClassDecl)
+					name1 = ((MemberClassDecl)o1).getClassDecl().name();
+				else
+					name1 = ((MemberInterfaceDecl)o1).getInterfaceDecl().name();
+
+				if (o2 instanceof MemberClassDecl)
+					name2 = ((MemberClassDecl)o2).getClassDecl().name();
+				else
+					name2 = ((MemberInterfaceDecl)o2).getInterfaceDecl().name();
+
+				return name1.compareTo(name2);
+			}
+		});
+		for (BodyDecl bd : other)
+			bd.toString(s);
+		s.append(indent() + "}");
+	}
+	
+	refine PrettyPrint public void Modifiers.toString(StringBuffer s) {
+		ArrayList<Modifier> mods = new ArrayList<Modifier>();
+		for(Modifier mod : getModifiers())
+			mods.add(mod);
+		Collections.sort(mods, new Comparator<Modifier>() {
+			public int compare(Modifier mod1, Modifier mod2) {
+				return mod1.getID().compareTo(mod2.getID());
+			}
+		});
+		for(Modifier mod : mods) {
+			mod.toString(s);
+			s.append(" ");
+		}
+	}
+	
+	refine GenericsPrettyPrint private void GenericClassDecl.ppTypeParameters(StringBuffer s) {
+		ArrayList<TypeVariable> typeparms = new ArrayList<TypeVariable>();
+		for(TypeVariable tv : getTypeParameters())
+			typeparms.add(tv);
+		Collections.sort(typeparms, new Comparator<TypeVariable>() {
+			public int compare(TypeVariable tv1, TypeVariable tv2) {
+				return tv1.name().compareTo(tv2.name());
+			}
+		});
+	    s.append('<');
+	    if(typeparms.size() > 0) {
+	    	typeparms.get(0).toString(s);
+	    	for (int i=1; i < typeparms.size(); i++) {
+	    		s.append(", ");
+	    		typeparms.get(i).toString(s);
+	    	}
+	    }
+	    s.append('>');
+	}
+	
+	refine GenericMethods private void GenericMethodDecl.ppTypeParameters(StringBuffer s) {
+		ArrayList<TypeVariable> typeparms = new ArrayList<TypeVariable>();
+		for(TypeVariable tv : original().getTypeParameters())
+			typeparms.add(tv);
+		Collections.sort(typeparms, new Comparator<TypeVariable>() {
+			public int compare(TypeVariable tv1, TypeVariable tv2) {
+				return tv1.name().compareTo(tv2.name());
+			}
+		});
+	    s.append(" <");
+	    for(int i = 0; i < typeparms.size(); i++) {
+	      if(i != 0) s.append(", ");
+	      typeparms.get(i).toString(s);
+	    }
+	    s.append("> ");		
+	}
+	
+	// output names of compilation units; this helps when comparing results
+	public static boolean CompilationUnit.printCUNames = false;
+	refine PrettyPrint public void CompilationUnit.toString(StringBuffer s) {
+		if(printCUNames)
+			s.append("compilation unit "+getID()+"\n");
+	    try {
+	        if(!getPackageDecl().equals("")) {
+	          s.append("package " + getPackageDecl() + ";\n");
+	        }
+	        for(int i = 0; i < getNumImportDecl(); i++) {
+	          getImportDecl(i).toString(s);
+	        }
+			ArrayList<TypeDecl> tds = new ArrayList<TypeDecl>();
+			for(int i=0;i<getNumTypeDecl();++i)
+				tds.add(getTypeDecl(i));
+			Collections.sort(tds, new Comparator<TypeDecl>() {
+				public int compare(TypeDecl td1, TypeDecl td2) {
+					return td1.name().compareTo(td2.name());
+				}
+			});
+	        for(TypeDecl td : tds) {
+	          td.toString(s);
+	          s.append("\n");
+	        }
+	      } catch (NullPointerException e) {
+	        System.out.print("Error in compilation unit hosting " + getTypeDecl(0).typeName());
+	        throw e;
+	      }
+	}
+	
+	// find a doubly-parenthesised expression
+	public Expr ASTNode.findDoublyParenthesised() {
+		for(int i=0;i<getNumChild();++i) {
+			ASTNode child = getChild(i);
+			if(child != null) {
+				Expr e = child.findDoublyParenthesised();
+				if(e != null) return e;
+			}
+		}
+		return null;
+	}
+	
+	public Expr ParExpr.findDoublyParenthesised() {
+		if(getExpr() instanceof ParExpr)
+			return ((ParExpr)getExpr()).getExpr();
+		return super.findDoublyParenthesised();
+	}
+	
+	// find a statement with a given label
+	public LabeledStmt ASTNode.findStmtWithLabel(String l) {
+		for(int i=0;i<getNumChild();++i) {
+			ASTNode child = getChild(i);
+			if(child != null) {
+				LabeledStmt s = child.findStmtWithLabel(l);
+				if(s != null) return s;
+			}
+		}
+		return null;
+	}
+	
+	public LabeledStmt LabeledStmt.findStmtWithLabel(String l) {
+		if(getLabel().equals(l))
+			return this;
+		return super.findStmtWithLabel(l);
+	}
+	
+	public Stmt LabeledStmt.unlabel() {
+		Stmt s = getStmt();
+		replaceWith(s);
+		return s;
+	}
+	
+	public void Expr.unparenthesise() {
+		if(getParent() instanceof ParExpr) {
+			getParent().replaceWith(this);
+			unparenthesise();
+		}
+	}
+	
+	public ASTNode Program.findNodeAfter(Class clazz, String comment) {
+		for(CompilationUnit cu : getCompilationUnits()) {
+			FileRange fr = cu.findComment(comment);
+			if(fr != null)
+				return cu.findNodeAfter(clazz, fr.el, fr.ec);
+		}
+		return null;
+	}
+	
+	public ASTNode ASTNode.findNodeAfter(Class clazz, int line, int column) {
+		for(int i=0;i<getNumChild();++i) {
+			ASTNode res = getChild(i).findNodeAfter(clazz, line, column);
+			if(res != null)
+				return res;
+		}
+		if(clazz.isAssignableFrom(this.getClass())) {
+			int startLine = getLine(getStart()),
+				startColumn = getColumn(getStart());
+			if(line < startLine || line == startLine && column <= startColumn)
+				return this;
+		}
+		return null;
+	}
+	
+	public ASTNode Program.findNodeBefore(Class clazz, String comment) {
+		for(CompilationUnit cu : getCompilationUnits()) {
+			FileRange fr = cu.findComment(comment);
+			if(fr != null)
+				return cu.findNodeBefore(clazz, fr.sl, fr.sc);
+		}
+		return null;
+	}
+	
+	public ASTNode ASTNode.findNodeBefore(Class clazz, int line, int column) {
+		for(int i=getNumChild()-1;i>=0;--i) {
+			ASTNode res = getChild(i).findNodeBefore(clazz, line, column);
+			if(res != null)
+				return res;
+		}
+		if(clazz.isAssignableFrom(this.getClass())) {
+			int endLine = getLine(getEnd()),
+				endColumn = getColumn(getEnd());
+			if(endLine != 0 && endLine < line || endLine == line && endColumn <= column)
+				return this;
+		}
+		return null;
+	}
+
+	public ASTNode Program.findNodeBetween(Class clazz, String startComment, String endComment) {
+		for(CompilationUnit cu : getCompilationUnits()) {
+			FileRange fr1 = findComment(startComment),
+					  fr2 = findComment(endComment);
+			if(fr1 != null && fr2 != null)
+				return findNodeBetween(clazz, fr1.el, fr1.ec, fr2.sl, fr2.sc);
+		}
+		return null;
+	}
+	
+	public ASTNode ASTNode.findNodeBetween(Class clazz, int line1, int column1, int line2, int column2) {
+		for(int i=0;i<getNumChild();++i) {
+			ASTNode res = getChild(i).findNodeBetween(clazz, line1, column1, line2, column2);
+			if(res != null)
+				return res;
+		}
+		if(clazz.isAssignableFrom(this.getClass())) {
+			int startLine = getLine(getStart()),
+				startColumn = getColumn(getStart()),
+			    endLine = getLine(getEnd()),
+				endColumn = getColumn(getEnd());
+			if((line1 < startLine || line1 == startLine && column1 <= startColumn)
+					&&
+			   (endLine != 0 && endLine < line2 || endLine == line2 && endColumn <= column2))
+				return this;
+		}
+		return null;
+	}
+	
+	public Stmt CompilationUnit.findStmtFollowingComment(String comment) {
+		FileRange fr = findComment(comment);
+		if(fr == null)
+			return null;
+		return findStmtFollowing(fr.el);
+	}
+	
+	public Stmt CompilationUnit.findStmtPrecedingComment(String comment) {
+		FileRange fr = findComment(comment);
+		if(fr == null)
+			return null;
+		return findStmtPreceding(fr.el);
+	}
+	
+	public Stmt ASTNode.findStmtFollowing(int line) {
+		for(int i=0;i<getNumChild();++i) {
+			Stmt s = getChild(i).findStmtFollowing(line);
+			if(s != null)
+				return s;
+		}
+		return null;
+	}
+	
+	public Stmt Stmt.findStmtFollowing(int line) {
+		int l = ASTNode.getLine(getStart());
+		if(l == line || l == line+1)
+			return this;
+		return super.findStmtFollowing(line);
+	}
+	
+	public Stmt ASTNode.findStmtPreceding(int line) {
+		for(int i=0;i<getNumChild();++i) {
+			Stmt s = getChild(i).findStmtPreceding(line);
+			if(s != null)
+				return s;
+		}
+		return null;
+	}
+	
+	public Stmt Stmt.findStmtPreceding(int line) {
+		int l = ASTNode.getLine(getEnd());
+		if(l == line || l == line-1)
+			return this;
+		return super.findStmtPreceding(line);
+	}
+	
+	
+	
+	public boolean List.contains(Object o) {
+    	for (int i = 0; i < getNumChild(); i++)
+    		if (getChild(i).equals(o))
+    			return true;
+    	return false;
+	}
+	
+	public boolean List.containsAll(List l) {
+		for (int i = 0; i < l.getNumChild(); i++)
+			if (!l.contains(l.getChild(i)))
+				return false;
+		return true;
+	}
+	
+	public class ParameterizedTypeFlushing {
+		public static String parameterizedFlush(String s) { return s; }
+		  
+		  public static TypeDecl parameterizedFlush(TypeDecl s) {
+			  if (null != s && s.isParameterizedType())
+				  return null;
+			  return s;
+		  }
+		  
+		  public static SmallSet parameterizedFlush(SmallSet s) {
+			    if(s != null) 
+			      for(java.util.Iterator i = s.iterator(); i.hasNext(); ) {
+			        Object o = i.next();
+			        if(null != o && o instanceof TypeDecl && ((TypeDecl)o).isParameterizedType()) 
+			          try {
+			            i.remove();
+			          }
+			          catch (UnsupportedOperationException e) {
+			            return null;
+			          }
+			      }
+			    return s;
+			  }
+		  
+		public static ASTNode parameterizedFlush(ASTNode n) { return n; }
+		  
+		public static Map parameterizedFlush(Map m) {
+			if (m != null) {
+				for (Iterator i = m.entrySet().iterator(); i.hasNext();) {
+					java.util.Map.Entry e = (java.util.Map.Entry) i.next();
+					if (null != e.getValue() && e.getValue() instanceof TypeDecl &&
+							((TypeDecl) e.getValue()).isParameterizedType())
+						i.remove();
+				}
+			}
+			return m;
+		}
+		
+		public static SimpleSet parameterizedFlush(SimpleSet s) {
+			if (s != null)
+				for (Iterator i = s.iterator(); i.hasNext();) {
+					Object o = i.next();
+					if (null != o && o instanceof TypeDecl &&
+							((TypeDecl) o).isParameterizedType())
+						return null;
+				}
+			return s;
+		}
+		
+		public static Collection parameterizedFlush(Collection c) {
+			if (c != null)
+				for (Iterator i = c.iterator(); i.hasNext();) {
+					Object o = i.next();
+					if (null != o && o instanceof TypeDecl &&
+							((TypeDecl) o).isParameterizedType())
+						try {
+							i.remove();
+						} catch (UnsupportedOperationException e) {
+							return null;
+						}
+				}
+			return c;
+		}
+		
+		public static List parameterizedFlush(List l) {
+			if (l != null)
+				for (Iterator i = l.iterator(); i.hasNext();) {
+					Object o = i.next();
+					if (null != o && o instanceof TypeDecl &&
+							((TypeDecl) o).isParameterizedType())
+						try {
+							i.remove();
+						} catch (UnsupportedOperationException e) {
+							return null;
+						}
+				}
+			return l;
+		}
+	}
+	
+	public class AggregatePrinter {
+		static java.util.Set<String> printed = new HashSet<String>();
+		public static String prefix = ""; 
+		static void print(String s) {
+			s = prefix + " :: " + s;
+		    if(!printed.contains(s) && 
+		    		!s.endsWith(" same\n") && 
+		    		!s.matches(".*_computed : boolean\\s.*\\s*") && 
+		    		!s.matches(".*_visited : int\\s.*\\s*")) {
+		      printed.add(s);
+		      System.out.print(s);
+		    }
+		}
+	}
+	
+	
+	public void List.toString(StringBuffer s) {
+    	s.append("[ ");
+    	for (int i = 0; i < getNumChild(); i++) {
+    		s.append(getChild(i).toString());
+    		if (i+1<getNumChild()) s.append(", \n");
+    	}
+    	s.append(" ]");
+	}
+	
+	
+	public void Program.writeBack() throws IOException {
+		for(Iterator i = compilationUnitIterator(); i.hasNext();) {
+			CompilationUnit cu = (CompilationUnit) i.next();
+			if (cu.fromSource())
+				cu.writeBack();
+		}
+	}
+	
+	public void CompilationUnit.writeBack() throws IOException {
+		FileWriter fw = new FileWriter(pathName);
+		fw.write(toString());
+		fw.close();
+	}
+	
+	public void ASTNode.parentChildCheckNoTransform() {
+		for (int i = 0; i < getNumChildNoTransform(); i++) {
+			if (children[i] == null) {
+				System.err.println("Warning: child is null during parentChildCheck");
+				continue;
+			}
+			if (this != getChildNoTransform(i).parent)
+				throw new RuntimeException("inconsistent tree! (child's parent == null : " + (getChildNoTransform(i).parent == null) + ")");
+			getChildNoTransform(i).parentChildCheck();
+		}
+	}
+	public void ASTNode.parentChildCheck() {
+		for (int i = 0; i < getNumChild(); i++) {
+			if (children[i] == null) {
+				System.err.println("Warning: child is null during parentChildCheck");
+				continue;
+			}
+			if (this != getChild(i).getParent())
+				throw new RuntimeException("inconsistent tree! (child's parent == null : " + (getChild(i).getParent() == null) + ")");
+			getChild(i).parentChildCheck();
+		}
+	}
+}

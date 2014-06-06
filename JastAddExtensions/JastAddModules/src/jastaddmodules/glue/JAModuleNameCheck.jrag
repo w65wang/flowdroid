@@ -1,0 +1,16 @@
+aspect JAModuleNameCheck {
+	//refined from Java1.5Frontend/StaticImports
+	refine StaticImports public void CompilationUnit.nameCheck() {
+		if (getPackageDecl().indexOf(Program.MODULE_SEPARATOR) != -1) {
+			error("Invalid package name: " + getPackageDecl());
+		}
+		StaticImports.CompilationUnit.nameCheck();
+	} 
+	
+	public void ModuleDecl.nameCheck() {
+		if (getModuleAccess().getID().indexOf(Program.MODULE_SEPARATOR) != -1 ||
+			getModuleAccess().getID().equals(Program.DEFAULT_MODULE_NAME)) {
+			error("Invalid module name " + getModuleAccess().getID()); 
+		}
+	}
+}

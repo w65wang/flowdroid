@@ -1,0 +1,10 @@
+Adding Refactoring to the plugin
+
+1. Add FooRefactoring extends Refactoring and a wizard, input page
+	to package org.jastadd.plugin.jastaddj.refactor.foo
+which should hold the properties with default values
+and a code for doing the refactoring + generating the changes
+
+2. Add FooRefactoringHandler to package org.jastadd.plugin.jastaddj.editor.actions
+
+3. Add RefactoringInfo object to array org.jastadd.plugin.jastaddj.refactor.Refactorings.refactorings

@@ -1,0 +1,101 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{xspace}
+\usepackage{xcolor}
+\usepackage{stmaryrd}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{listings}
+\usepackage{supertabular}
+\usepackage{multiletter}
+\usepackage{morefloats}
+
+\title{Specifications of Implemented Refactorings}
+\author{Max Sch\"afer, Tom\'a\v{s} Ko\v{c}isk\'y}
+
+\newcommand{\refactoring}[1]{\textsc{#1}}
+\newcommand{\refactoringNoExt}[1]{\lfloor\refactoring{#1}\rfloor}
+\newcommand{\type}[1]{\ensuremath{\text{\textsl{#1}}}}
+\newcommand{\util}[1]{\ensuremath{\text{\texttt{#1}}}}
+\newcommand{\orelse}{\,\textbf{or}\,}
+\newcommand{\bind}{\gg=}
+\newcommand{\assert}{\textbf{assert}\,\,}
+\newcommand{\locked}[1]{\ensuremath{\llbracket #1\rrbracket}}
+\newcommand{\option}[1]{\ensuremath{\text{\texttt{option}\xspace #1}}}
+\newcommand{\None}{\util{None}\xspace}
+\newcommand{\Some}[1]{\util{Some}\xspace #1}
+\newcommand{\listtp}[1]{\ensuremath{\text{\texttt{list}\xspace #1}}}
+\newcommand{\settp}[1]{\ensuremath{\text{\texttt{set}\xspace #1}}}
+\newcommand{\sourcelink}[1]{\texttt{#1}}
+
+\definecolor{KWColor}{rgb}{0.5,0,0.67}
+
+\lstset{
+  language=[JastAdd]Java,
+  basicstyle=\ttfamily\small,
+  commentstyle=\footnotesize\rmfamily\emph,
+  keywordstyle=\bf\ttfamily\small\color{KWColor},
+  morekeywords={with},
+  escapeinside={/*@}{@*/},
+  literate={[}{{$\lfloor$}}1 {]}{{$\rfloor$}}1,
+}
+
+\newcommand{\code}[1]{\lstinline$#1$}
+\newcommand{\progoutput}[1]{\texttt{#1}}
+\lstnewenvironment{java}{}{}
+\newcommand{\kw}[1]{\textbf{\color{KWColor}{#1}}}
+
+\begin{document}
+\maketitle
+
+This document collects the pseudo-code specifications of all refactoring implemented in our engine. \textbf{Note:} This is work in progress; some specifications are missing, and not all implementations agree completely with the specifications.
+
+\section{Pseudocode Conventions}
+We give our specifications in generic, imperative pseudocode. Parameters and return values are informally typed, with syntax tree nodes having one of the types from Fig.~\ref{fig:node types}. Additionally, we use an ML-like \util{option} type with constructors \util{None} and \util{Some} for functions that may or may not return a value.
+
+Where convenient, we make use of ML-like lists, with list literals of the form $[1; 2; 3]$ and $|xs|$ indicating the length of list $xs$.
+
+The names of refactorings are written in \refactoring{small caps}, whereas utility functions appear in \util{monospace}. A list of utility functions with brief descriptions is given in Fig.~\ref{fig:utility}. An invocation of a refactoring is written with floor-brackets $\refactoringNoExt{like this}()$ to indicate that any language extensions used in the output program produced by the refactoring should be eliminated before proceeding.
+
+We write $A<:B$ to mean that type $A$ extends or implements type $B$, and $m<:m'$ to mean that method $m$ overrides method $m'$.
+
+\section{The Refactorings}
+
+\input{ConvertAnonymousToLocal.tex}
+\input{ConvertAnonymousToNested.tex}
+\input{ConvertLocalToMemberClass.tex}
+\input{ExtractClass.tex}
+\input{ExtractConstant.tex}
+\input{ExtractMethod.tex}
+\input{ExtractTemp.tex}
+\input{InlineConstant.tex}
+\input{InlineMethod.tex}
+\input{InlineTemp.tex}
+\input{InsertMethod.tex}
+\input{IntroduceFactory.tex}
+\input{IntroduceIndirection.tex}
+\input{IntroduceParameter.tex}
+\input{IntroduceParameterObject.tex}
+\input{MakeMethodStatic.tex}
+\input{MoveInnerToToplevel.tex}
+\input{MoveInstanceMethod.tex}
+\input{MoveMembers.tex}
+\input{PromoteTempToField.tex}
+\input{PullUp.tex}
+\input{PushDown.tex}
+\input{Rename.tex}
+\input{SelfEncapsulateField.tex}
+
+\clearpage
+
+\section{Node Types}
+\input{nodetypes.tex}
+
+\section{Utility Functions}
+\input{utility.tex}
+
+\clearpage
+
+\listofalgorithms
+\end{document}

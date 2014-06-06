@@ -1,0 +1,4 @@
+module m2;
+
+import m4;
+export package *;

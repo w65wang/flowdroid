@@ -1,0 +1,3 @@
+Unrecoverable semantic error(s) found.
+M1.module:4,10:
+  Semantic Error: Incompatible modules in merge: M3, M2

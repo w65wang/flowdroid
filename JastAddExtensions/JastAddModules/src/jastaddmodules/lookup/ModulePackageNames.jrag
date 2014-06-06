@@ -1,0 +1,120 @@
+import jastaddmodules.*;
+aspect ModulePackageNames {
+	//from Java1.4/QualifiedNames.jrag
+	refine QualifiedNames eq CompilationUnit.packageName() {
+	
+		//avoid calls that reference getParent() on CUs that are generated from JARs, 
+		//since there is a call to isObject() which in turn calls packageName on a CU
+		//that is not yet attached to Program. It works on normal java programs since it just
+		//returns packageDecl without going higher. However, jastaddmodules needs to go higher
+		//due to package name mangling (it needs to fetch the module name to include in the
+		//mangled package name. 
+		if (!this.fromSource()) {
+			return QualifiedNames.CompilationUnit.packageName();
+		}
+		
+		if (getModuleCompilationUnit() == null) {
+			return QualifiedNames.CompilationUnit.packageName();
+		} else if (getModuleCompilationUnit().getLocalPackage(moduleLocalPackageName()) == null) {
+			//TODO: This could cause problems when exported packages happen. Make sure that
+			//packageName() is not called until collectLocalPackages is done.
+			return getModuleCompilationUnit()
+						.makeGlobalExportedPackageName(moduleLocalPackageName());
+		} else if (getModuleCompilationUnit().getLocalPackage(moduleLocalPackageName()) != null) {
+			ModuleCompilationUnit mcu = getModuleCompilationUnit();
+			return mcu.makeGlobalPackageName(moduleLocalPackageName(),
+							mcu.getLocalPackage(moduleLocalPackageName()));
+		}
+		assert false : "Unexpected case in ModulePackageNames.CompilationUnit.packageName()";
+		return null;
+	}
+	
+	//change packageaccess package name to use module separator
+	refine QualifiedNames eq PackageAccess.packageName() {
+		StringBuffer s = new StringBuffer();
+		if(hasPrevExpr()) {
+			s.append(prevExpr().packageName());
+			if (prevExpr().parentDot() instanceof ModuleDot) {
+				s.append(Program.MODULE_SEPARATOR);
+			} else if (parentDot() instanceof Dot) {
+				s.append(".");
+			} else {
+				assert false : "Unexpected dot type: " + parentDot().getClass();
+			}
+		}
+		s.append(getPackage());
+		return s.toString();
+	}
+	refine QualifiedNames eq PackageOrTypeAccess.packageName() {
+		StringBuffer s = new StringBuffer();
+		if(hasPrevExpr()) {
+			s.append(prevExpr().packageName());
+			if (prevExpr().parentDot() instanceof ModuleDot) {
+				s.append(Program.MODULE_SEPARATOR);
+			} else if (parentDot() instanceof Dot) {
+				s.append(".");
+			} else {
+				assert false : "Unexpected dot type: " + parentDot().getClass();
+			}
+		}
+		s.append(name());
+		return s.toString();
+	}
+	
+	
+	syn lazy String CompilationUnit.moduleLocalPackageName() {
+		return getPackageDecl();
+	}
+	eq CompilationUnit.getChild().moduleLocalPackageName() {
+		return moduleLocalPackageName();
+	}
+	inh String TypeDecl.moduleLocalPackageName();
+	
+	protected HashMap<String, LocalModulePackage> ModuleCompilationUnit.localPackages = 
+		new HashMap<String, LocalModulePackage>();
+	public void ModuleCompilationUnit.addLocalPackage(String name, LocalModulePackage localPackage) {
+		localPackages.put(name, localPackage);
+	}
+	public LocalModulePackage ModuleCompilationUnit.getLocalPackage(String name) {
+		return localPackages.get(name);
+	}
+	public HashMap<String, LocalModulePackage> ModuleCompilationUnit.getLocalPackageMap() {
+		return this.localPackages;
+	}
+	
+	public LocalModulePackage ModuleCompilationUnit.getLocalPackageWithSuper(String name) {
+		ModuleCompilationUnit currMCU = this;
+		while (currMCU != null) {
+			if (currMCU.getLocalPackage(name) != null) {
+				return currMCU.getLocalPackage(name);
+			}
+			currMCU = currMCU.getSuperInstance();
+		}
+		return null;
+	}
+	
+	public String ModuleCompilationUnit.makeGlobalExportedPackageName(String packageName) {
+		if (packageName.equals("")) {
+			return this.getModuleName();
+		} else {
+			return this.getModuleName() + ".$" + packageName;
+		}	
+	}
+	public String ModuleCompilationUnit.makeGlobalNonExportedPackageName(String packageName) {
+		if (packageName.equals("")) {
+			return this.getModuleName();
+		} else {
+			return this.getModuleName() + "$$" + packageName;
+		}
+	}
+	public String ModuleCompilationUnit.makeGlobalPackageName(String packageName, LocalModulePackage localModulePackage) {
+		assert (localModulePackage != null) : "localModulePackage should not be null"; 
+		if (localModulePackage.isExported()) {
+			return makeGlobalExportedPackageName(packageName);
+		} else {
+			return makeGlobalNonExportedPackageName(packageName);
+		}
+	}
+	
+	
+}

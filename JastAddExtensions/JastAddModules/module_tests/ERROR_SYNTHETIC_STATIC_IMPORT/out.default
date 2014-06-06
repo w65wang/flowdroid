@@ -1,0 +1,4 @@
+WARNING: file "*.java" does not exist
+Unrecoverable semantic error(s) found.
+m1.module:2,8:
+  Semantic Error: Unable to find module: m2

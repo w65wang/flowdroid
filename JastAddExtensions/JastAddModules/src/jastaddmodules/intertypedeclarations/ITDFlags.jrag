@@ -1,0 +1,32 @@
+
+//TODO: Currently not in use.
+public aspect ITDFlags {
+	/*
+	eq IntertypeMethodDecl.flags() {
+		int res = 0;
+		res = super.flags();
+		//always public
+		res &= (~(Modifiers.ACC_PRIVATE | Modifiers.ACC_PROTECTED));
+		res |= Modifiers.ACC_PUBLIC;
+		return res;
+	}
+
+	eq IntertypeConstructorDecl.flags() {
+		int res = 0;
+		res = super.flags();
+		//always public
+		res &= (~(Modifiers.ACC_PRIVATE | Modifiers.ACC_PROTECTED));
+		res |= Modifiers.ACC_PUBLIC;
+		return res;
+	}
+
+	eq IntertypeFieldDeclaration.flags() {
+		int res = 0;
+		res = super.flags();
+		//always public
+		res &= (~(Modifiers.ACC_PRIVATE | Modifiers.ACC_PROTECTED));
+		res |= Modifiers.ACC_PUBLIC;
+		return res;
+	}
+	*/		
+}

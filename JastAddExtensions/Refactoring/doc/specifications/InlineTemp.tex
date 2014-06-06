@@ -1,0 +1,69 @@
+\subsection{\refactoring{Inline Temp}}
+This refactoring inlines a local variable into all its uses. Implemented in \sourcelink{InlineTemp/InlineTemp.jrag}; see Algorithms~\ref{alg:InlineTemp}, \ref{alg:SplitDeclaration}, \ref{alg:InlineAssignment}, \ref{alg:RemoveDecl}.
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Inline Temp}(d : \type{LocalVar})$}
+\label{alg:InlineTemp}
+\begin{algorithmic}[1]
+\REQUIRE Java
+\ENSURE Java
+\medskip
+\STATE $a \leftarrow \refactoringNoExt{Split Declaration}(d)$
+\STATE $\refactoringNoExt{Inline Assignment}(a)$
+\STATE $\refactoringNoExt{Remove Decl}(v)$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Split Declaration}(d : \type{LocalVar}) : \option{\type{Assignment}}$}
+\label{alg:SplitDeclaration}
+\begin{algorithmic}[1]
+\REQUIRE Java $\setminus$ compound declarations
+\ENSURE Java $\cup$ locked names, first-class array init
+\medskip
+\IF{$d$ has initialiser}
+  \STATE $x \leftarrow \text{variable declared in $d$}$
+  \STATE $a \leftarrow \text{new assignment from initialiser of $d$ to $x$}$
+  \STATE insert $a$ as statement after $d$
+  \STATE remove initialiser of $d$
+  \RETURN \Some{$a$}
+\ELSE
+  \RETURN \None
+\ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Inline Assignment}(a : \type{Assignment})$}
+\label{alg:InlineAssignment}
+\begin{algorithmic}[1]
+\REQUIRE Java $\setminus$ implicit assignment conversion
+\ENSURE Java $\cup$ locked dependencies
+\medskip
+\STATE $x \leftarrow \text{LHS of $a$}$
+\STATE \assert $x$ refers to local variable
+\STATE $U \leftarrow \text{all $u$ such that $a$ is a reaching definition of $u$}$
+\FORALL{$u\in U$}
+  \STATE \assert $a$ is the only reaching definition of $u$
+  \STATE \assert $u$ is not an lvalue
+  \STATE \assert $u,a$ are in same body declaration
+  \STATE replace $u$ with a locked copy of the RHS of $a$
+\ENDFOR
+\IF{$U\neq\emptyset$}
+  \STATE remove $a$
+\ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Remove Decl}(d : \type{LocalVar})$}
+\label{alg:RemoveDecl}
+\begin{algorithmic}[1]
+\REQUIRE Java $\setminus$ compound declarations
+\ENSURE Java
+\medskip
+\IF{$d$ is not used and has no initialiser}
+  \STATE remove $d$
+\ENDIF
+\end{algorithmic}
+\end{algorithm}

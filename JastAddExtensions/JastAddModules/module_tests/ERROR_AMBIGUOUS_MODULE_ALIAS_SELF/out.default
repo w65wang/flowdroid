@@ -1,0 +1,3 @@
+WARNING: file "*.java" does not exist
+m1.module:1:
+  Semantic Error: Ambiguous module name m1 in module m1

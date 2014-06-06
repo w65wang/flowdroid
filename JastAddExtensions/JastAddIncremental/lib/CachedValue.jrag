@@ -1,0 +1,36 @@
+
+public class CachedValue {
+  private DependentList list;
+  private int last_computed;
+  private java.lang.Object value;
+  public CachedValue(ASTNode home, java.lang.Object value) {
+    super();
+    this.list = DependentList.emptyDependentList;
+    this.last_computed = home.getCacheRoot().getLastFlushed();
+    this.value = value;
+  }
+  public java.lang.Object getValue() {
+    return value;
+  }
+  public void setValue(ASTNode home, java.lang.Object value) {
+    this.last_computed = home.getCacheRoot().getLastFlushed();
+    Object before = this.value;
+    this.value = value;
+    if(this.value == null ? before != null : !this.value.equals(before))
+      propagate(home);
+    else
+      this.value = before;
+  }
+  public void addDependent(Caching.CacheRoot dep) {
+    list = list.add(dep);
+  }
+  public void propagate(ASTNode home) {
+    list.propagate(home);
+  }
+  public int last_computed() {
+    return last_computed;
+  }
+  public boolean hasExternalDependents(ASTNode home) {
+    return !list.isEmpty(home);
+  }
+}

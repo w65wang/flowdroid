@@ -1,0 +1,212 @@
+aspect JastAdd {
+  
+  syn Modifiers SynEq.getModifiers() = new Modifiers(new List());
+  syn Access SynEq.getTypeAccess() = (decl() != null ? decl().type() : unknownType()).createBoundAccess();
+  syn List SynEq.getExceptionList() = new List();
+  eq SynEq.name() = "eq " + getID();
+
+  eq AttributeDecl.isPublic() = true;
+
+  eq InhEq.getChild().thisType() = getTargetType().type();
+
+  eq AttributeDecl.getTypeAccess().nameType() = NameType.TYPE_NAME;
+  eq AttributeDecl.getTargetType().nameType() = NameType.TYPE_NAME;
+
+  eq InhEq.getTargetType().nameType() = NameType.TYPE_NAME;
+  eq InhEq.getParameter().nameType() = NameType.TYPE_NAME;
+  eq InhEq.getChildParameter().nameType() = NameType.TYPE_NAME;
+
+  inh TypeDecl SynEq.unknownType();
+  inh TypeDecl InhEq.unknownType();
+
+  // TODO: fixme
+  eq InhEq.getBlock().returnType() = unknownType();
+
+  syn boolean SynDecl.hasEqBody() = hasBlock() && !getBlock().isDummy();
+  public boolean Block.isDummy() {
+    return false;
+  }
+  // Add dummy body to please compiler
+  rewrite SynDecl {
+    when(!hasBlock())
+    to SynDecl {
+      setBlock(
+        new Block(
+          new List().add(
+            new ThrowStmt(
+              new ClassInstanceExpr(
+                lookupType("java.lang", "Error").createQualifiedAccess(),
+                new List(),
+                new Opt()
+              )
+            )
+          )
+        ) {
+          public boolean isDummy() {
+            return true;
+          }
+        }
+      );
+      return this;
+    }
+  }
+  
+
+  syn lazy Map Program.inhEquationsMap() {
+    Map map = new HashMap();
+    collectInhEquations(map);
+    return map;
+  }
+  protected void ASTNode.collectInhEquations(Map map) {
+    for(int i = 0; i < getNumChild(); i++)
+      getChild(i).collectInhEquations(map);
+  }
+  protected void InhEq.collectInhEquations(Map map) {
+    if(!map.containsKey(name()))
+      map.put(name(), new ArrayList(1));
+    Collection c = (Collection)map.get(name());
+    c.add(this);
+  }
+  protected void InhDecl.collectInhEquations(Map map) {
+    if(!map.containsKey(name()))
+      map.put(name(), new ArrayList(1));
+    Collection c = (Collection)map.get(name());
+    c.add(this);
+  }
+  inh Collection AttributeDecl.lookupInhEq(String name);
+  eq Program.getCompilationUnit(int i).lookupInhEq(String name) =
+    inhEquationsMap().containsKey(name) ? (Collection)inhEquationsMap().get(name) : new ArrayList(0);
+
+  syn Collection InhDecl.decls() {
+    Collection c = new ArrayList(1);
+    for(Iterator iter = lookupInhEq(name()).iterator(); iter.hasNext(); ) {
+      Object o = iter.next();
+      if(o instanceof InhEq) {
+        if(((InhEq)o).matches(this))
+          c.add(o);
+      }
+    }
+    return c;
+  }
+
+  syn InhDecl InhEq.decl() {
+    for(Iterator iter = lookupInhEq(name()).iterator(); iter.hasNext(); ) {
+      Object o = iter.next();
+      if(o instanceof InhDecl) {
+        if(matches((InhDecl)o))
+          return (InhDecl)o;
+      }
+    }
+    return null;
+  }
+
+  public boolean InhEq.matches(InhDecl decl) {
+    if(!name().equals(decl.name()))
+      return false;
+    if(getNumParameter() != decl.getNumParameter())
+      return false;
+    for(int i = 0; i < getNumParameter(); i++)
+      if(getParameter(i).type() != decl.getParameter(i).type())
+        return false;
+    return true;
+  }
+
+  syn boolean ASTDecl.hasEquation(SynDecl decl) =
+    methodsSignatureMap().get("eq " + decl.signature()) != null;
+
+  public void SynEq.nameCheck() {
+    super.nameCheck();
+    if(decl() == null)
+      error("Can not find declaration for attribute");
+  }
+
+  public void AttributeDecl.typeCheck() {
+    super.typeCheck();
+    if(declaredNTA() && !type().subtype(astNode()))
+      error("declared nta:s must be subtypes of ASTNode");
+    if(!(introducedType().subtype(astNode())) && !introducedType().isInterfaceDecl())
+      error("attributes can only be introduced in AST nodes");
+  }
+
+  public void InhEq.typeCheck() {
+    super.typeCheck();
+    if(!(introducedType().subtype(astNode())))
+      error("inh equations can only be introduced in AST nodes");
+  }
+  
+  syn SynDecl SynEq.decl() {
+    TypeDecl typeDecl = introducedType();
+    SimpleSet set = (SimpleSet)typeDecl.methodsSignatureMap().get(signature().substring(3)); // strip "eq "
+    if(set != null && set.size() == 1) {
+      MethodDecl m = (MethodDecl)set.iterator().next();
+      if(m instanceof SynDecl)
+        return (SynDecl)m;
+    }
+    return null;
+  }
+  
+  syn TypeDecl InhEq.introducedType() = getTargetType().type();   // type in which this equation is valid
+  syn String InhEq.name() = getAttributeName();           // attribute name
+  syn String InhEq.childName() = getChildName().startsWith("get") ? getChildName().substring(3) : getChildName();          // name of the child of hostType that is the root for this equation
+
+  syn lazy List AttributeDecl.getEmptyBracketList() = new List();
+  syn lazy List AttributeDecl.getExceptionList() = new List();
+  
+  syn lazy Opt InhDecl.getBlockOpt() = new Opt(new Block(new List().add(new ThrowStmt(new NullLiteral()))));
+
+  syn lazy boolean AttributeDecl.isLazy() = getLazy() || declaredNTA();
+
+  eq AttributeDecl.getModifiers().mayBePublic() = true;
+  eq AttributeDecl.getModifiers().mayBeProtected() = true;
+  eq AttributeDecl.getModifiers().mayBePrivate() = true;
+  eq AttributeDecl.getModifiers().mayBeAbstract() = false;
+  eq AttributeDecl.getModifiers().mayBeStatic() = false;
+  eq AttributeDecl.getModifiers().mayBeFinal() = false;
+  eq AttributeDecl.getModifiers().mayBeSynchronized() = false;
+  eq AttributeDecl.getModifiers().mayBeNative() = false;
+  eq AttributeDecl.getModifiers().mayBeStrictfp() = false;
+
+  eq InhEq.getParameter().isMethodParameter() = true;
+  eq InhEq.getParameter().isConstructorParameter() = false;
+  eq InhEq.getParameter().isExceptionHandlerParameter() = false;
+  eq InhEq.getBlock().reachable() = true;
+  eq InhEq.getChildParameter().isMethodParameter() = true;
+  eq InhEq.getChildParameter().isConstructorParameter() = false;
+  eq InhEq.getChildParameter().isExceptionHandlerParameter() = false;
+
+  eq InhEq.getBlock().lookupVariable(String name) = localLookupVariable(name);
+  eq InhEq.getParameter().lookupVariable(String name) = localLookupVariable(name);
+  eq InhEq.getChildParameter().lookupVariable(String name) = localLookupVariable(name);
+
+  syn lazy SimpleSet InhEq.localLookupVariable(String name) {
+    for(int i = 0; i < getNumChildParameter(); i++)
+      if(getChildParameter(i) instanceof Variable) {
+        Variable v = (Variable)getChildParameter(i);
+        if(v.name().equals(name))
+          return SimpleSet.emptySet.add(v);
+      }
+    for(int i = 0; i < getNumParameter(); i++)
+      if(getParameter(i) instanceof Variable) {
+        Variable v = (Variable)getParameter(i);
+        if(v.name().equals(name))
+          return SimpleSet.emptySet.add(v);
+      }
+    SimpleSet set = introducedType().memberFields(name);
+    if(!set.isEmpty()) return set;
+    return lookupVariable(name);
+  }
+
+  eq SynDecl.getBlock().lookupMethod(String name) {
+    Collection c = introducedType().memberMethods(name);
+    if(!c.isEmpty())
+      return c;
+    return lookupMethod(name);
+  }
+
+  eq InhEq.getBlock().lookupMethod(String name) {
+    Collection c = introducedType().memberMethods(name);
+    if(!c.isEmpty())
+      return c;
+    return lookupMethod(name);
+  }
+}

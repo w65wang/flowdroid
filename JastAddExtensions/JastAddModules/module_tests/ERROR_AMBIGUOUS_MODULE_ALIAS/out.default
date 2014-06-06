@@ -1,0 +1,6 @@
+M1.module:1:
+  Semantic Error: Ambiguous module name M2 in module M1
+M1.module:1:
+  Semantic Error: Ambiguous module name M2alias1 in module M1
+M1.module:1:
+  Semantic Error: Ambiguous module name M23alias in module M1

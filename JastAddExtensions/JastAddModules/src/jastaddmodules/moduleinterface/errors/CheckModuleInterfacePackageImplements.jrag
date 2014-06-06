@@ -1,0 +1,40 @@
+
+aspect CheckModuleInterfacePackageImplements {
+	//checks if the exported packages in implemented interfaces are actually found
+	//in the MCUs local package map
+	//should be done after collect local module packages
+	public void ASTNode.checkModuleInterfacePackageImplements() {}
+	public void ModuleCompilationUnit.checkModuleInterfacePackageImplements() {
+		if (isModuleInterface()) {
+			return;
+		} 
+		if (!isModuleInstantiated()) {
+			return;
+		}
+		//check if the exported packages in the implemented interfaces are part of
+		//the exported local packages here
+		for (ModuleAccess ma: getModuleDecl().getImplementsList()) {
+			ModuleCompilationUnit interfaceCU = getHostProgram().lookupModuleCUNoTransform(ma);
+			if (ma == null) { //should have already been handled in CheckModuleDecls
+				continue;
+			}
+			for (String packageName : interfaceCU.getExportedPackages()) {
+				if (getLocalPackageWithSuper(packageName) == null) {
+					ma.error("Implemented module interface " + 
+						interfaceCU.getModuleName() + 
+						" exports package " + 
+						packageName + 
+						" but is not present in module " + 
+						this.getModuleName());
+				} else if (!(getLocalPackageWithSuper(packageName).isExported())){
+					ma.error("Implemented module interface " + 
+						interfaceCU.getModuleName() + 
+						" exports package " + 
+						packageName + 
+						" but is not exported in module " + 
+						this.getModuleName());
+				}
+			}
+		}
+	}
+}

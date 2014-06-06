@@ -1,0 +1,159 @@
+\subsection{\refactoring{Inline Method}}
+This refactoring is inverse of $\refactoring{Extract Method}$. Implemented in \sourcelink{InlineMethod/}; 
+see Algorithms~\ref{alg:InlineMethod}, \ref{alg:InlineMethodAccess}, \ref{alg:InlineToAnonymousMethod}, %
+\ref{alg:IntroduceOutParameter}, %
+\ref{alg:OpenVariables}, \ref{alg:InlineAnonymousMethod}, \ref{alg:InlineBlock}.
+
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Inline Method}(m \colon \type{Method})$}
+\label{alg:InlineMethod}
+\begin{algorithmic}[1]
+\REQUIRE Java
+\ENSURE Java $\cup$ fresh variables, \code{with} statement, locked names
+\medskip
+  \FORALL{$methosAccess$ in $\util{polyUses}(m)$} 
+    \STATE $\refactoring{Inline Method Access}(methodAccess)$
+  \ENDFOR
+  \STATE $\refactoring{Remove Method}(m)$ \orelse\ $\refactoring{Id}()$
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Inline Method Access}(ma \colon \type{MethodAccess})$}
+\label{alg:InlineMethodAccess}
+\begin{algorithmic}[1]
+\REQUIRE Java
+\ENSURE Java $\cup$ fresh variables, \code{with} statement, locked names
+\medskip
+  \STATE $am \leftarrow \refactoring{Inline To Anonymous Method}(ma)$
+  \STATE $\refactoring{Introduce Out Parameter}(am)$
+  \STATE $\refactoring{Open Variables}(am)$
+  \STATE $node \leftarrow \refactoring{Inline Anonymous Method}(am)$
+  \IF[in particular, it does not have a label]{$node$ is a $\type{Block}$}
+    \STATE $\refactoring{Inline Block}(node)$
+  \ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Inline To Anonymous Method}(am \colon \type{MethodAccess}) : \type{AnonymousMethod}$}
+\label{alg:InlineToAnonymousMethod}
+\begin{algorithmic}[1]
+\REQUIRE Java $\setminus$ \code{synchronized} qualifier, implicit \code{this} qualification
+\ENSURE Java $\cup$ \code{with} statement, locked names
+\medskip
+  \STATE $A \leftarrow \text{host class}$
+  \STATE \assert $\util{target}(ma)$ is unambiguous
+  \STATE $target \leftarrow \util{target}(ma)$
+  \STATE \assert $target$ has a body
+  \STATE lock names in $target$
+  \STATE $am \leftarrow$ copy $target$ as anonymous method with arguments from $ma$
+  \IF{$ma$ is a \code{super} call}
+    \STATE \assert body of $am$ does not reference enclosing instances
+    \STATE adjust virtual calls in body of $am$ to bind to corresponding methods of $A$
+  \ELSIF{$ma$ is qualified}
+    \STATE $q \leftarrow \text{qualifier}$
+    \STATE add \code{with(q)} statement around the body of $am$
+    \STATE replace qualifier and the access with $am$
+  \ELSE
+    \STATE replace $ma$ with $am$
+  \ENDIF
+  \RETURN $am$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Introduce Out Parameter}(am \colon \type{AnonymousMethod})$}
+\label{alg:IntroduceOutParameter}
+\begin{algorithmic}[1]
+\REQUIRE
+\ENSURE adds fresh variables, locked names
+\medskip
+  \STATE $\util{eliminateVarargs}()$
+  \STATE $parent \leftarrow \util{parent}(am)$
+  \IF{$parent$ is simple assignment expression}
+    \STATE \assert destination of $parent$ assignment is a variable
+    \STATE $v \leftarrow $ destination variable of $parent$
+    \STATE set return type of $am$ to \code{void}
+    \STATE add new fresh paremeter to $am$ with \code{out} modifier, type locked to $\util{type}(v)$
+    \STATE add new argument to $am$ locked to $\util{decl}(v)$
+    \STATE change \code{return} statements to assignment to the parameter and simple \code{return}
+    \STATE replace $parent$ with $am$
+  \ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Open Variables}(am \colon \type{AnonymousMethod})$}
+\label{alg:OpenVariables}
+\begin{algorithmic}[1]
+\REQUIRE 
+\ENSURE adds fresh variables, locked names 
+\medskip
+  \FORALL{$(par, arg)$ in $\util{reverse}( \util{zip}\ \util{params}(am)\ \util{args}(am))$}
+    \IF{$par$ is \code{in} parameter}
+      \STATE $newdecl \leftarrow$ new variable declaration initialized to $arg$ with locked names
+      \STATE insert $newdecl$ at the beginning of block of $am$
+    \ELSE[$par$ is \code{out} parameter]
+      \STATE \assert $arg$ is a variable access
+      \STATE lock all uses of $par$ to $\util{decl}(arg)$
+    \ENDIF
+    \STATE remove $par$, $arg$ from $am$
+  \ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Inline Anonymous Method}(am \colon \type{AnonymousMethod}) : ASTNode$}
+\label{alg:InlineAnonymousMethod}
+\begin{algorithmic}[1]
+\REQUIRE no implicit \code{return}, no \code{return void}
+\ENSURE no explicit \code{return} 
+\medskip
+  \STATE \assert $am$ has no parameters
+  \STATE \assert one of the following three conditions is \code{true}
+  \IF{$am$ is the expression in an expression statement}
+    \STATE $l \leftarrow $ fresh label usable for block of $am$
+    \FORALL{$ret$ in $\util{returns}(am)$}
+      \IF{$ret$ has a result}
+        \IF{result of $ret$ is pure}
+	  \STATE \COMMENT{as $am$ is in an expression statement the result can be discarted and not evaluated}
+	\ELSE
+	  \STATE add an evaluation of the result of $ret$ before $ret$
+	\ENDIF
+      \ENDIF
+      \STATE replace $ret$ with a \code{break} statement with label $l$
+    \ENDFOR
+    \STATE replace $am$ with its block and remove useless \code{break}s
+  \ELSIF{$am$ is an expression closure, i.e.\ body is only a return statement}
+    \STATE replace $am$ with expression from the \code{return} statement
+  \ELSIF{$am$ is the expression in a \code{return} statement}
+    \STATE replace the outer \code{return} with block of $am$
+  \ENDIF
+  \RETURN the expression or statement we replaced with
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Inline Block}(b \colon \type{Block})$}
+\label{alg:InlineBlock}
+\begin{algorithmic}[1]
+\REQUIRE 
+\ENSURE add locked names
+\medskip
+  \STATE \assert $b$ is a statement in a block without a label
+  \STATE $\util{lockAllNames}(\text{parent block of }b)$
+  \FORALL{$stmt$ in $b$}
+    \STATE remove $stmt$ from $b$ and put it just before $b$
+  \ENDFOR
+  \STATE remove $b$
+\end{algorithmic}
+\end{algorithm}
+
+

@@ -1,0 +1,88 @@
+Arguments: 
+-jastaddframework
+-debug
+-d
+classes
+-instance-module
+m1
+A.java
+m1.module
+m2.module
+../testlib/jastadd$framework.module
+End arguments
+----------Module contents----------
+------m1.module------
+module m1;
+import own m2 as m2a;
+import own m2 as m2b;
+merge m2a, m2b as m2merged;
+------------------------
+------m2.module------
+module m2;
+------------------------
+------A.java------
+module: module m1;;
+module CU : m1.module
+module name : m1
+------------------------
+------../testlib/jastadd$framework.module------
+module jastadd$framework;
+------------------------
+----------CU AST before insert----------
+module: m1, file: m1.module, base module: m1
+module: m2, file: m2.module, base module: m2
+A.java package:
+module: jastadd$framework, file: ../testlib/jastadd$framework.module, base module: jastadd$framework
+----------CU AST after insert----------
+module: m1, file: m1.module, base module: m1
+	A.java package:m1
+module: m2, file: m2.module, base module: m2
+module: jastadd$framework, file: ../testlib/jastadd$framework.module, base module: jastadd$framework
+----------Module CU imports before import own----------
+module m1, base:m1, context:[], instantiated:false
+module m2, base:m2, context:[], instantiated:false
+module jastadd$framework, base:jastadd$framework, context:[], instantiated:false
+-------------Instance ModuleCompilationUnit------------
+module m1;
+import own m2 as m2a;
+import own m2 as m2b;
+merge m2a, m2b as m2merged;
+replace m2a with own m2;
+export package *;
+import  jastadd$framework as none null;
+-----------End Instance ModuleCompilationUnit----------
+----------CU AST after generateImportOwn----------
+module: m1, file: m1.module, base module: m1
+	A.java package:m1
+module: m2, file: m2.module, base module: m2
+module: jastadd$framework, file: ../testlib/jastadd$framework.module, base module: jastadd$framework
+module: m1$m2merged, file: m2.module, base module: m2
+module: m1$1, file: m2.module, base module: m2
+
+----------Module CU imports after import own----------
+module m1, base:m1, context:[], instantiated:true
+	jastadd$framework:jastadd$framework
+	m2a:m1$1
+	m2b:m1$m2merged
+	m2merged:m1$m2merged
+module m2, base:m2, context:[], instantiated:false
+module jastadd$framework, base:jastadd$framework, context:[], instantiated:true
+module m1$m2merged, base:m2, context:[m1], instantiated:true
+	jastadd$framework:jastadd$framework
+module m1$1, base:m2, context:[m1], instantiated:true
+	jastadd$framework:jastadd$framework
+----------MCU collectTypes after import own----------
+
+Module: m1
+	m1.A
+Module: m2
+Module: jastadd$framework
+Module: m1$m2merged
+Module: m1$1
+
+----------CU iterator----------
+m1.module, A.java, m2.module, ../testlib/jastadd$framework.module, m2.module, m2.module
+m1.module:7:
+  WARNING: The module reference m2a is already merged. It is advisable to use the merged reference instead: 
+	merge m2a, m2b as m2merged;
+which is declared in module m1

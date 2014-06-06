@@ -1,0 +1,35 @@
+
+aspect CollectSuperModuleCUs {
+
+	//gets the module's super module, and creates a copy of the CU subtree of that module
+	public boolean Program.collectSuperModules() {
+		List<CompilationUnit> cuList = getCompilationUnitList();
+		for (CompilationUnit cu : cuList) {
+			cu.collectSuperModules();
+		}
+		return true;
+	}
+	public boolean CompilationUnit.collectSuperModules() {
+		//do nothing
+		return true;
+	}
+	public boolean ModuleCompilationUnit.collectSuperModules() {
+		//module decl has no extends, do nothing
+		if (!getModuleDecl().hasExtends()) {
+			return true;
+		}
+		//if the super module is already set, don't collect this node again
+		if (getSuperModuleCU() != null) {
+			return true;
+		}
+		this.setSuperModuleCU(getHostProgram().lookupModuleCUNoTransform(getModuleDecl().getExtends()));
+		assert (this.getSuperModuleCU() != null) : "Supermodule should have been set: " + getModuleDecl().getExtends().toString();
+
+		//collect the super modules of the super module;
+		getSuperModuleCU().collectSuperModules();
+		
+		return true;
+	}
+	
+	
+}

@@ -1,0 +1,8 @@
+abstract AttributeDecl : IntertypeMethodDecl ::= Modifiers <Lazy:boolean> TypeAccess:Access TargetType:Access <ID:String> Parameter:ParameterDeclaration* [Block] /Exception:Access*/;
+
+SynDecl : AttributeDecl ::= Modifiers <Lazy:boolean> TypeAccess:Access TargetType:Access <ID:String> Parameter:ParameterDeclaration* [Block] /Exception:Access*/;
+InhDecl : AttributeDecl ::= Modifiers <Lazy:boolean> TypeAccess:Access TargetType:Access <ID:String> Parameter:ParameterDeclaration* /[Block]/ /Exception:Access*/;
+
+SynEq : IntertypeMethodDecl ::= TargetType:Access <ID:String> Parameter:ParameterDeclaration* [Block] /Modifiers/ /TypeAccess:Access/ /Exception:Access*/;
+InhEq : BodyDecl ::= TargetType:Access <ChildName:String> ChildParameter:ParameterDeclaration* <AttributeName:String> Parameter:ParameterDeclaration* Block;
+

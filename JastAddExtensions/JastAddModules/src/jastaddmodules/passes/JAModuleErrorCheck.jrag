@@ -1,0 +1,166 @@
+//STANDING NOTE: Make VERY sure that all JAModule passes before the java 
+//errorcheck DO NOT TOUCH any AST nodes below CompilationUnit to avoid 
+//the REWRITES
+
+import jastaddmodules.ModuleReference;
+import jastaddmodules.CycleType;
+
+aspect JAModuleErrorCheck {
+	//dependent on Java1.4Frontend/ErrorCheck.CompilationUnit.errors/warnings
+	//adapted from abc-ja-exts/CheckModuleErrors.jrag
+  	public void Program.initErrHandling(Collection err, Collection warn) {
+  		err.clear();
+  		warn.clear();
+  		
+  		for (Object node : getCompilationUnitList()) {
+  			CompilationUnit cu = (CompilationUnit) node;
+  			if(cu.fromSource()) {
+  				cu.initErrHandling();
+  			}
+  		}
+  	}
+  	public void CompilationUnit.initErrHandling() {
+  		errors.clear();
+  		warnings.clear();
+  	}
+  	public void ModuleCompilationUnit.initErrHandling() {
+  		errors.clear();
+  		warnings.clear();
+		for (CompilationUnit cu : getCompilationUnitList()) {
+			cu.initErrHandling();
+		}  		
+  	}
+
+  	public void Program.collectModuleErrors(Collection err) {
+  		for (Iterator iter = compilationUnitIterator(); iter.hasNext(); ) {
+  			CompilationUnit cu = (CompilationUnit)iter.next();
+  			if(cu.fromSource()) {
+  				cu.collectModuleErrors(err);
+  			}
+  		}
+  	}
+  	public void CompilationUnit.collectModuleErrors(Collection err) {
+  		err.addAll(errors);
+  	}
+
+	//used in some asserts  	
+  	protected boolean Program.errorsFound = false;
+  	public boolean Program.errorsFound() {
+  		 return this.errorsFound;
+  	}
+  	public void Program.setErrorsFound(boolean b) {
+  		this.errorsFound = b;
+  	}
+  	refine ErrorCheck public void ASTNode.error(String s) {
+  		ErrorCheck.ASTNode.error(s);
+  		
+		ASTNode node = this;
+		while(node != null && !(node instanceof Program)) {
+			node = node.getParent();
+		}
+		Program program = (Program) node;
+		program.setErrorsFound(true);
+  	}
+  	
+  	//Single error checks, done before CU insertions/generatOwn
+  	public void ASTNode.checkModuleErrorsPass1() {
+  		checkModuleDecls();
+  		checkModuleCycles();
+  		checkDuplicateModuleNames();
+  		checkExtendsCycles();
+  		checkInterfaceExtends();
+  	
+		for (int i = 0 ; i < getNumChild(); i++) {
+			getChild(i).checkModuleErrorsPass1();
+		}
+  	}
+  	//STANDING NOTE: Cut off errorcheck at CompilationUnit/ModuleCompilationUnit children
+  	//so that the rewrites are not triggered
+  	public void CompilationUnit.checkModuleErrorsPass1() {
+  		checkModuleDecls();
+  		checkModuleCycles();
+  		checkDuplicateModuleNames();
+  		checkExtendsCycles();
+  		checkInterfaceExtends();
+
+		if (getModuleDecl() != null) {
+			getModuleDecl().checkModuleErrorsPass1();  	
+		}
+  	}
+
+  	//Single error checks, done after the CU insert but before the Generate import own
+  	public void ASTNode.checkModuleErrorsPass2() {
+  		checkModuleInterfaceContents();
+  		
+		for (int i = 0 ; i < getNumChild(); i++) {
+			getChild(i).checkModuleErrorsPass2();
+		}
+  	}
+  	//STANDING NOTE: Cut off errorcheck at CompilationUnit/ModuleCompilationUnit children
+  	//so that the rewrites are not triggered
+  	public void CompilationUnit.checkModuleErrorsPass2() {
+		checkModuleInterfaceContents();
+		
+		if (getModuleDecl() != null) {
+			getModuleDecl().checkModuleErrorsPass2();  	
+		}
+  	}
+  	
+
+  	//Single error checks, done after all the module passes
+  	public void ASTNode.checkModuleErrorsPass3() {
+  		//checkJastAddFramework();
+  		checkNoModuleInterfaceInstance();
+  		checkModuleInterfacePackageImplements();
+  		checkNoSyntheticInstances();
+  		
+		for (int i = 0 ; i < getNumChild(); i++) {
+			getChild(i).checkModuleErrorsPass3();
+		}
+  	}
+  	//STANDING NOTE: Cut off errorcheck at CompilationUnit/ModuleCompilationUnit children
+  	//so that the rewrites are not triggered
+  	public void CompilationUnit.checkModuleErrorsPass3() {
+  		//checkJastAddFramework();
+		checkNoModuleInterfaceInstance();
+		checkModuleInterfacePackageImplements();
+		checkNoSyntheticInstances();
+		
+		if (getModuleDecl() != null) {
+			getModuleDecl().checkModuleErrorsPass3();  	
+		}
+  	}
+
+	//refines/implements
+	//from Java1.4Frontend/ErrorCheck.jrag
+	public void ModuleCompilationUnit.collectErrors() {
+		nameCheck();
+		typeCheck();
+		accessControl();
+		exceptionHandling();
+		checkUnreachableStmt();
+		//NEIL: Disable due to stack overflow in svg case study
+		//definiteAssignment();
+		checkModifiers();
+		
+		getModuleDecl().collectErrors();
+		getModuleMemberDeclList().collectErrors();
+		//Don't go down into child CUs, compilationUnitIterator will go through them anyway
+	}
+	
+	//NEIL: Removed definite assignment due to stack overflow heisenbug.
+	refine ErrorCheck public void ASTNode.collectErrors() {
+		nameCheck();
+		typeCheck();
+		accessControl();
+		exceptionHandling();
+		checkUnreachableStmt();
+		//NEIL: Disable due to error caused by stack overflow in release case study
+		//definiteAssignment();
+		checkModifiers();
+		for(int i = 0; i < getNumChild(); i++) {
+		  getChild(i).collectErrors();
+		}
+	}
+	
+}

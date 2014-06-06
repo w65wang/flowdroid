@@ -1,0 +1,33 @@
+BodyDecl intertype_member_declaration =
+  REFINE type.r? modifiers.m? type name.targetType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN throws.t? method_body.b
+    {: return new IntertypeMethodDecl(new Modifiers(m), type, IDENTIFIER, p, t, b, targetType).setRefined(r); :}
+  | REFINE type.r? modifiers.m? VOID name.targetType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN throws.t? method_body.b
+    {: return new IntertypeMethodDecl(new Modifiers(m), new TypeAccess("void"), IDENTIFIER, p, t, b, targetType).setRefined(r); :}
+  ;
+
+
+BodyDecl syn_eq =
+  REFINE type.r EQUATION name DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN block
+    {: return new SynEq(name, IDENTIFIER, p, new Opt(block)).setRefined(new Opt(r)); :}
+/*
+  |
+    REFINE type.r EQUATION name DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN EQ expression SEMICOLON
+    {: return new SynEq(name, IDENTIFIER, p, new Opt(new Block(new List().add(new ReturnStmt(new Opt(expression)))))).setRefined(new Opt(r)); :}
+*/
+  ;
+/*
+    REFINE type.r EQUATION name DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN EQ expression SEMICOLON
+    {: return new SynEq(name, IDENTIFIER, p, new Opt(new Block(new List().add(new ReturnStmt(new Opt(expression)))))).setRefined(new Opt(r)); :}
+  | REFINE type.r? EQUATION name DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN block
+    {: return new SynEq(name, IDENTIFIER, p, new Opt(block)).setRefined(r); :}
+  ;
+*/
+
+BodyDecl inh_eq =
+   REFINE type.r EQUATION name.type DOT IDENTIFIER.child LPAREN formal_parameter_list.p1? RPAREN DOT IDENTIFIER.attribute LPAREN formal_parameter_list.p? RPAREN block
+    {: return new InhEq(type, child, p1, attribute, p, block).setRefined(new Opt(r)); :}
+  ;
+
+Access method_invocation =
+  REFINED LPAREN argument_list.l? RPAREN {: return  new RefinedMethodAccess("refined", l); :}
+  ;

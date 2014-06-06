@@ -1,0 +1,23 @@
+aspect Comments {
+
+  syn String ASTNode.javaDocComment() {
+    CompilationUnit cu = declarationCompilationUnit();
+    if(cu != null) {
+      String s = cu.comment(getBeginLine());
+      if(s != null && s.startsWith("/**"))
+        return s;
+    }
+    return null;
+  }
+
+  public String CompilationUnit.comment(int line) {
+    if(comments != null) {
+      Integer key = new Integer(line);
+      if(comments.containsKey(key))
+        return (String)comments.get(key);
+      key = new Integer(line - 1);
+      return (String)comments.get(key);
+    }
+    return null;
+  }
+}

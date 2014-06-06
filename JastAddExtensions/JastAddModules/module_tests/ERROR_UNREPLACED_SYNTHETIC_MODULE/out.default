@@ -1,0 +1,5 @@
+WARNING: file "*.java" does not exist
+synthetic msynthetic:0:
+  Semantic Error: Synthetic module msynthetic used in modules m1 was not replaced with a non-interface module.
+synthetic msynthetic:0:
+  Semantic Error: Synthetic module msynthetic used in modules m1 was not replaced with a non-interface module.

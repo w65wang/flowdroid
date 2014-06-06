@@ -1,0 +1,31 @@
+
+aspect ModuleExpr {
+	public ModuleCompilationUnit ModuleExpr.getModuleInstance(ModuleCompilationUnit context) {
+		throw new Error("getModuleInstance called on abstract ModuleExpr");
+	}
+	public ModuleCompilationUnit ModuleAccessExpr.getModuleInstance(ModuleCompilationUnit context) {
+		return context.lookupModule(getModuleAccess().getID());
+	}
+	public ModuleCompilationUnit ModuleOwnExpr.getModuleInstance(ModuleCompilationUnit context) {
+		ModuleCompilationUnit baseCU = getHostProgram().lookupModuleCUNoTransform(getModuleAccess());
+		if (baseCU == null) {
+			return null;
+		}
+		
+		ModuleCompilationUnit instance = baseCU.generateModuleInstance(context, context.createAnonName(context)); 
+		getHostProgram().getCompilationUnitList().addChild(instance);
+		
+		//remove context from the instance, the context will be added later on the replaces
+		instance.removeInstanceContext(context);
+		 
+		return instance;
+	}
+	public ModuleCompilationUnit ModuleSingletonAccessExpr.getModuleInstance(ModuleCompilationUnit context) {
+		ModuleCompilationUnit baseCU = getHostProgram().lookupModuleCUNoTransform(getModuleAccess());
+		if (baseCU == null) {
+			return null;
+		}
+		
+		return baseCU.generateModuleInstance(null);
+	}
+}

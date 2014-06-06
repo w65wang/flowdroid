@@ -1,0 +1,14 @@
+aspect PackageFix {
+  /*
+  refine Relocate public String CompilationUnit.getPackageDecl() {
+    String s = refined();
+    if(s == null || s.equals("")) {
+      String n = relativeName();
+      if(n != null && (n.endsWith(".ast") || n.endsWith(".jrag") || n.endsWith(".jadd"))) {
+        s = "ast";
+      }
+    }
+    return s;
+  }
+  */
+}

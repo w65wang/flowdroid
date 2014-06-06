@@ -1,0 +1,275 @@
+import java.util.Iterator;
+
+import org.eclipse.ltk.core.refactoring.*;
+import org.eclipse.core.resources.IFile;
+import org.eclipse.text.edits.TextEdit;
+import org.eclipse.text.edits.ISourceModifier;
+import org.eclipse.text.edits.MoveSourceEdit;
+import org.eclipse.text.edits.MoveTargetEdit;
+import org.eclipse.text.edits.MultiTextEdit;
+import org.eclipse.text.edits.ReplaceEdit;
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IResource;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.SubProgressMonitor;
+import org.eclipse.jdt.core.JavaCore;
+import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.ltk.core.refactoring.Change;
+import org.jastadd.plugin.jastaddj.util.FileUtil;
+import org.eclipse.core.runtime.Path;
+import org.eclipse.jdt.internal.corext.refactoring.nls.changes.CreateFileChange;
+import org.eclipse.ltk.core.refactoring.resource.DeleteResourceChange;
+
+import AST.ASTModification;
+import AST.ASTNode;
+
+aspect CreateTextEdit {
+	
+	refine PrettyPrint public void ConstructorDecl.toString(StringBuffer s) {
+		boolean hasConstructorsWithParameters = false;
+		for (ConstructorDecl cd : (Collection<ConstructorDecl>) hostType().constructors())
+			if (cd.getNumParameter() > 0) {
+				hasConstructorsWithParameters = true;
+				break;
+			}
+				
+		if (this.getVisibility() == hostType().getVisibility() && 
+				getConstructorAccess() instanceof SuperConstructorAccess &&
+				this.getBlock().getNumStmt() == 0 &&
+				!hasConstructorsWithParameters)
+			/*don't print*/;
+		else
+			refined(s);
+	}
+	
+	public CompilationUnit ASTModification.getCompilationUnit() {
+		return null;
+	}
+	
+	public CompilationUnit ASTModificationInsertChild.getCompilationUnit() {
+		return isInTree ? parent.compilationUnit() : null;
+	}
+	
+	public CompilationUnit ASTModificationRemoveChild.getCompilationUnit() {
+		return isInTree ? parent.compilationUnit() : null;
+	}
+	
+	public CompilationUnit ASTModificationReplaceEdit.getCompilationUnit() {
+		return isInTree ? node.compilationUnit() : null;
+	}
+	
+	public CompilationUnit ASTModificationSetChild.getCompilationUnit() {
+		return isInTree ? parent.compilationUnit() : null;
+	}
+	
+//	public void ASTModificationCompilationUnitSetId.createTextEdit(ChangeAccumulator accu) {
+//		if (!isInTree)
+//			throw new Error("Compilation unit should be in the tree.");
+//		if (accu.DEBUG) System.out.println("Changes : " + this.toString() + " " + node.getClass().getName() + " " + accu.getPathName(node) + " " + oldValue + " " + newValue);
+//		accu.addChange(new RenameCompilationUnitChange(org.jastadd.plugin.jastaddj.util.FileUtil.getFile(accu.getPathName(node)).getFullPath(), oldValue, newValue));
+//	}
+//	
+//	public void ASTModificationSetChild.createTextEdit(ChangeAccumulator accu) {
+//
+//		if (!isInTree)
+//			return;
+//
+//		if (!(newChild instanceof CompilationUnit && ((CompilationUnit) newChild).fromSource()) &&
+//				(parent.getCompilationUnit() == null || !parent.getCompilationUnit().fromSource()))
+//			return;
+//		
+//		if (parent != newChild_oldParent && !(newChild instanceof CompilationUnit))
+//				accu.moved.add(newChild);
+//		
+//		ASTNode replace = oldChild;
+//		ASTNode<ASTNode> with = newChild;
+//		
+//		/*
+//		 * special handling if we are setting a child (CompilationUnit) to a Program
+//		 * 
+//		 * by changing a child we can add, remove, replace a compilation unit,
+//		 * ant it should be handled here
+//		 * 
+//		 * FIXME: not implemented
+//		 */
+//		if (newChild instanceof CompilationUnit) {
+//			if (replace == null)
+//				replace = with;
+//			try {
+//				final Path path = new Path(((CompilationUnit) newChild).destinationPath());
+//				String defaultCharset = ResourcesPlugin.getWorkspace().getRoot().getDefaultCharset();
+//				/*
+//				 * I have expected CreateFileChange to create a compilation unit and delete it on undo,
+//				 * but it was checking for existence of the new file,
+//				 * so I tried to override it, with not much success, and it sometimes also broke the eclipse undo.
+//				 */
+//				Change ch = new CreateFileChange(path, "", defaultCharset) {
+//
+//					@Override
+//					public RefactoringStatus isValid(IProgressMonitor pm) throws CoreException {
+//						return new RefactoringStatus();
+//					}
+//
+//					@Override
+//					public Change perform(IProgressMonitor pm) throws CoreException, OperationCanceledException {
+//						// the action does not create the file, so create it here, it however provides an undo action
+//
+////						boolean fileCreated = false;
+////						try {
+////							fileCreated = path.toFile().createNewFile();
+////						} catch (IOException e) {
+////						}
+////						ResourcesPlugin.getWorkspace().getRoot().getFile(path.removeLastSegments(1)).refreshLocal(1, new SubProgressMonitor(pm, 1));
+////						if (fileCreated)
+//							return new DeleteResourceChange(path, true); // FIXME: false??
+////						else
+////							return new NullChange();
+//					}
+//
+//				};
+//				accu.addChange(ch);
+//			} catch (CoreException e) {
+//				throw new RuntimeException(e);
+//			}
+//			// TODO: handle remove/replace of CU
+//		}
+//
+//		if (replace == null && with == null)
+//			return;
+//		if (replace == null || with == null) {
+//			replace = parent;
+//			with = replace;
+//		}
+//
+//		ASTNode printedParent = accu.printedParent(replace);
+//		if (replace != null && !printedParent.equals(replace)) {
+//			replace = with = printedParent;
+//		}
+//
+//		// reprint parent if 
+//		if (replace instanceof List || replace instanceof Opt)
+//			replace = with;
+//		while (replace instanceof List /*equiv to: replace instanceof Opt*/) {
+//			replace = replace.getParent();
+//			with = replace;
+//		}
+//		
+//		
+//		int offset = replace.createOffset(replace.getStart());
+//		int length = replace.createOffset(replace.getEnd()) - offset + 1;
+//		
+//		// special offset and length for CompilationUnit
+//		if (replace instanceof CompilationUnit) {
+//			offset = 0;
+//			length = 0; // used if file !exists, e.g. when adding new compilation unit
+//			try {
+//				length = FileUtil.readTextFile(accu.getPathName(replace)).length();
+//			} catch (IOException e) {
+//			}
+//		}
+//	
+//		// if the localtion info are bad
+//		if (offset < 0 || length < 0 || accu.getMovedAncestor(replace) != null) {
+//			reprintNode(accu, replace.getParent());
+//			return;
+//		}
+//		
+//		IFile file = FileUtil.getFile(accu.getPathName(replace));
+//		if (accu.DEBUG) System.out.println("Changes : " + this.toString() + " " + replace.getClass().getName() + " " + file.getName() + " " + offset + " " + length);
+//		
+//		/*
+//		 * this looks like a hack but it is not
+//		 * 
+//		 * sometimes the tree is not in good state to generate the toString,
+//		 * e.g. some descendant is null,
+//		 * but in the end there should not be any of these left in the output.
+//		 */
+//		String with_ = "!!!ERROR!!!";
+//		try {
+//			with_ = with.toString();
+//		} catch (NullPointerException e) { }
+//		
+//		accu.addPrinted(replace);
+//		accu.addEdit(file, offset, length, with_);
+//	}
+	
+	class RenameCompilationUnitChange extends ResourceChange {
+		private final IPath path;
+		private final String old_name;
+		private final String new_name;
+		private final long stamp_to_restore;
+		
+		public RenameCompilationUnitChange(IPath path, String old_name, String new_name) {
+			this(path, old_name, new_name, IResource.NULL_STAMP);
+		}
+		
+		public RenameCompilationUnitChange(IPath path, String old_name, String new_name, long stamp_to_restore) {
+			this.path = path;
+			this.old_name = old_name;
+			this.new_name = new_name;
+			this.stamp_to_restore = stamp_to_restore;
+		}
+
+		protected final IResource getResource() {
+			return ResourcesPlugin.getWorkspace().getRoot().findMember(path);
+		}
+
+		public Object getModifiedElement() {
+			return JavaCore.create(getResource());
+		}
+
+		public String getNewName() {
+			return new_name;
+		}
+
+		public String getOldName() {
+			return old_name;
+		}
+
+		public final Change perform(IProgressMonitor pm) throws CoreException {
+			try {
+				pm.beginTask("Renaming Compilation Unit", 1);
+				IResource resource = getResource();
+				IPath newPath = createNewPath();
+				Change result = createUndoChange(resource.getModificationStamp());
+				doRename(new SubProgressMonitor(pm, 1));
+				if (stamp_to_restore != IResource.NULL_STAMP) {
+					IResource newResource = ResourcesPlugin.getWorkspace().getRoot().findMember(newPath);
+					newResource.revertModificationStamp(stamp_to_restore);
+				}
+				return result;
+			} finally {
+				pm.done();
+			}
+		}
+		
+		protected IPath createNewPath() {
+			//final IPath path = FileUtil.getFile(pathName).getFullPath();
+			if (path.getFileExtension() != null) {
+        String extension = path.getFileExtension();
+				return path.removeFileExtension().removeLastSegments(1).append(getNewName()).addFileExtension(extension);
+			} else
+				return path.removeLastSegments(1).append(getNewName());
+		}
+
+		protected Change createUndoChange(long stampToRestore) throws JavaModelException {
+			return new RenameCompilationUnitChange(createNewPath(), getNewName(), getOldName(), stampToRestore);
+		}
+
+		protected void doRename(IProgressMonitor pm) throws CoreException {
+			getResource().move(createNewPath(), false, pm);
+		}
+		
+		public String getName() {
+			return "Rename Compilation Unit " + old_name + " to " + new_name;
+		}
+
+		protected IResource getModifiedResource() {	
+			return getResource();
+		}
+	}
+
+}

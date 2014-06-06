@@ -1,0 +1,259 @@
+%goal goal;
+%goal jamodule_compilation_unit;
+
+//add moduleaccess. is null if no
+//module_decl won't be in order, but I have no choice
+CompilationUnit compilation_unit =
+	ja_module_decl.md modifiers.a package_declaration.p import_declarations.i? type_declarations.t?
+    {: 
+    	AnnotatedCompilationUnit ret = new AnnotatedCompilationUnit(p.getID(), i, t, new Modifiers(a));
+    	ret.setModuleDecl(md); 
+    	ret.addChild(md); //TODO: this is broken due to hardcoded numChildren for astnodes, find a way to make a moduledecl a packagedecl
+    	return ret;
+    :}
+    |
+    ja_module_decl.md package_declaration.p import_declarations.i? type_declarations.t? 
+    {: 
+    	CompilationUnit ret = new CompilationUnit(p.getID(), i, t);
+    	ret.setModuleDecl(md); 
+    	ret.addChild(md); //TODO: this is broken due to hardcoded numChildren for astnodes, find a way to make a moduledecl a packagedecl
+    	return ret;
+    :}
+	|
+	ja_module_decl.md import_declarations.i? type_declarations.t? 
+	{: 
+		CompilationUnit ret = new CompilationUnit("", i, t);
+    	ret.setModuleDecl(md); 
+    	ret.addChild(md); //TODO: this is broken due to hardcoded numChildren for astnodes, find a way to make a moduledecl a packagedecl
+		return ret;
+	:};
+
+//add moduleaccess
+CompilationUnit ast_file =
+	ja_module_decl.md package_declaration.p import_declarations.i? ast_declarations.t? 
+	{:
+		CompilationUnit ret = new CompilationUnit(p.getID(), i, t);
+		ret.setModuleDecl(md);
+		ret.addChild(md); //TODO: this is broken due to hardcoded numChildren for astnodes, find a way to make a moduledecl a packagedecl
+		return ret; 
+	:}
+	|
+	ja_module_decl.md import_declarations.i? ast_declarations.t? 
+	{: 
+		CompilationUnit ret = new CompilationUnit("", i, t);
+		ret.setModuleDecl(md);
+		ret.addChild(md); //TODO: this is broken due to hardcoded numChildren for astnodes, find a way to make a moduledecl a packagedecl
+		return ret; 
+	:};
+
+ModuleCompilationUnit jamodule_compilation_unit = 
+	ja_module_decl.md ja_module_member_list.jml? 
+	{:
+		ModuleCompilationUnit ret = new ModuleCompilationUnit("", new List(), new List(), md, jml, new List());
+		return ret;
+	:};
+
+ModuleAccess ja_module_access =
+	name_decl.n //TODO: Change to dotted name once you figure
+	{:
+		//TODO: Add start/stop locations
+		return new ModuleAccess(n.getID());
+	:};
+	
+ModuleDecl ja_module_decl =
+	MODULE ja_module_access.ma ja_module_decl_extends_opt.extends_opt ja_module_decl_implements.impl ja_module_decl_overrides.over SEMICOLON
+	{:
+		return new ModuleDecl(ma, extends_opt, impl, over);
+	:}
+	|
+	MODULE_INTERFACE ja_module_access.ma ja_module_decl_extends_opt.extends_opt SEMICOLON
+	{:
+		return new InterfaceModuleDecl(ma, extends_opt, new List(), new List());
+	:}
+	|
+	WEAK_MODULE_INTERFACE ja_module_access.ma ja_module_decl_extends_opt.extends_opt SEMICOLON
+	{:
+		return new WeakInterfaceModuleDecl(ma, extends_opt, new List(), new List());
+	:};
+
+Opt ja_module_decl_extends_opt =
+	{:
+		return new Opt();
+	:}
+	|
+	EXTENDS ja_module_access.ma
+	{:
+		return new Opt(ma);
+	:};
+
+List ja_module_decl_implements =
+	{:
+		return new List();
+	:}
+	|
+	IMPLEMENTS module_access_list.l
+	{:
+		return l;
+	:};
+
+List ja_module_decl_overrides =
+	{:
+		return new List();
+	:}
+	|
+	OVERRIDES module_access_list.l
+	{:
+		return l;
+	:};
+
+List ja_module_member_list =
+	ja_module_member.mm
+	{:
+		return new List().add(mm);
+	:}
+	|
+	ja_module_member_list.mml ja_module_member.mm 
+	{:
+		return mml.add(mm);
+	:};
+
+ModuleMemberDecl ja_module_member =
+	ja_module_import_decl.mid
+	{:
+		return mid; 
+	:}
+	|
+	ja_module_merge_decl.mmd
+	{:
+		return mmd;
+	:}
+	|
+	ja_module_replace_decl.mrd
+	{:
+		return mrd;
+	:}
+	|
+	ja_module_export_package.med
+	{:
+		return med;
+	:};
+
+ModuleImportDecl ja_module_import_decl =
+	IMPORT ja_module_access.ma SEMICOLON
+	{:
+		return new ModuleImportDecl(new ModuleImportTypeNorm(), ma, new AsTypeNone(), new NullModuleAccess());
+	:}
+	|
+	IMPORT OWN ja_module_access.ma SEMICOLON 
+	{:
+		return new ModuleImportDecl(new ModuleImportTypeOwn(), ma, new AsTypeNone(), new NullModuleAccess());
+	:}
+	|
+	IMPORT OWN ja_module_access.ma AS ja_module_access.mb SEMICOLON 
+	{:
+		return new ModuleImportDecl(new ModuleImportTypeOwn(), ma, new AsTypeOwn(), mb);
+	:}	
+	|
+	IMPORT OWN ja_module_access.ma EXPORT AS ja_module_access.mb SEMICOLON 
+	{:
+		return new ModuleImportDecl(new ModuleImportTypeOwn(), ma, new AsTypeExport(), mb);
+	:};
+
+ModuleMergeDecl ja_module_merge_decl =
+	MERGE module_access_list.mal AS ja_module_access.matype ja_module_access.ma SEMICOLON
+	{:
+		return new ModuleMergeDecl(mal, new AsTypeOwn(), matype, ma);
+	:}
+	|
+	MERGE module_access_list.mal EXPORT AS ja_module_access.matype ja_module_access.ma SEMICOLON
+	{:
+		return new ModuleMergeDecl(mal, new AsTypeExport(), matype, ma);
+	:};
+
+ModuleReplaceDecl ja_module_replace_decl =
+	REPLACE module_access_list.mal WITH ja_module_expr.me SEMICOLON
+	{:
+		return new ModuleReplaceDecl(mal, me);
+	:};
+
+List module_access_list =
+	ja_module_access.ma 
+	{:
+		List ret = new List();
+		ret.add(ma);
+		return ret;
+	:}
+	|
+	module_access_list.mal COMMA ja_module_access.ma
+	{:
+		return mal.add(ma);
+	:};
+
+Access qualified_name = 
+	name.n MODULE_SEPARATOR simple_name.sn
+	{:
+		return n.moduleQualifiesAccess(sn);
+	:}
+	|
+	MODULE_SEPARATOR name.n //for default module
+	{:
+		return new ParseName("").moduleQualifiesAccess(n);
+	:};
+
+
+Modifier modifier = 
+	MODULE                                     
+	{: 
+		return new Modifier("module"); 
+	:};
+	
+IdUse qualified_name_decl =
+	name_decl.n MODULE_SEPARATOR IDENTIFIER.i 
+	{: 
+		return new IdUse(n.getID() + "::" + i); 
+	:};
+
+//TODO: WTF is this production for?	
+ImportDecl type_import_on_demand_declaration =
+    IMPORT name.n DOT MODULE_SEPARATOR SEMICOLON           
+    {: 
+    	return new TypeImportOnDemandDecl(n); 
+    :};
+    
+ModuleExportDecl ja_module_export_package =
+	EXPORT PACKAGE ja_module_package_decl_list.l
+	{:
+		return new ModuleExportDecl(l);
+	:}
+	|
+	EXPORT PACKAGE MULT
+	{:
+		return new ModuleExportAllDecl(new List());
+	:};
+	
+List ja_module_package_decl_list =
+	name_decl.n
+	{:
+		return new List().add(new ModulePackageDecl(n.getID()));
+	:}
+	|
+	ja_module_package_decl_list.l COMMA name_decl.n
+	{:
+		return l.add(new ModulePackageDecl(n.getID()));
+	:};
+	
+ModuleExpr ja_module_expr =
+	ja_module_access.ma
+	{:
+		return new ModuleAccessExpr(ma);
+	:}
+	|
+	SINGLETON ja_module_access.ma
+	{:
+		return new ModuleSingletonAccessExpr(ma);
+	:}
+	|
+	OWN ja_module_access.ma
+	{:
+		return new ModuleOwnExpr(ma);
+	:};

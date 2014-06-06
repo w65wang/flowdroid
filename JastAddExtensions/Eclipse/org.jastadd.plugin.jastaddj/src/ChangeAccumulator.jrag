@@ -1,0 +1,76 @@
+import java.util.HashSet;
+
+import org.eclipse.ltk.core.refactoring.CompositeChange;
+
+aspect ChangeAccumulator {
+	
+
+	/* a change accumulator keeps track of changes happening to multiple files;
+	 * it creates one TextFileChange for every file affected and adds incoming
+	 * ReplaceEdits to them
+	 */
+	class ChangeAccumulator {
+		public static final boolean DEBUG = false;
+		
+		private String name;
+		private CompositeChange changes;
+		private HashSet<CompilationUnit> changed;
+		
+		public ChangeAccumulator(String name) {
+			this.name = name;
+			changes = new CompositeChange(name);
+			changed = new HashSet<CompilationUnit>();;
+		}
+
+		public void addAllEdits(Collection<ASTModification> col) {
+			// we need original paths for changes
+			Iterator<ASTModification> iter = col.iterator();
+			while(iter.hasNext()) {
+				ASTModification m = iter.next();
+				if (m instanceof ASTModificationCompilationUnitSetId) {
+					ASTModificationCompilationUnitSetId mm = (ASTModificationCompilationUnitSetId) m;
+					compilationUnitOriginalPath.put((CompilationUnit) mm.node, mm.oldPathName);
+				}
+			}
+			
+			iter = col.iterator();
+			while(iter.hasNext()) {
+				ASTModification m = iter.next();
+				if (DEBUG) System.out.print(m.toString() + " :: ");
+				CompilationUnit cu = m.getCompilationUnit();
+				if(cu == null || !cu.fromSource() || changed.contains(cu))
+					continue;
+				changed.add(cu);
+				IFile file = FileUtil.getFile(getPathName(cu));
+				TextFileChange tfc = new TextFileChange(name, file);
+				tfc.setEdit(new MultiTextEdit());
+				File osfile = new File(cu.pathName());
+				if(!osfile.exists())
+					throw new Error("File for compilation unit does not exist.");
+				long length = osfile.length();
+				tfc.addEdit(new ReplaceEdit(0, (int)length, cu.toString()));
+				changes.add(tfc);
+			}
+		}
+		
+		// directly add a non-TextChange
+		public void addChange(Change ch) {
+			changes.add(ch);
+		}
+		
+		public Change getChanges() {
+			return changes;
+		}
+		
+		// original paths
+		public Map<CompilationUnit, String> compilationUnitOriginalPath = new HashMap<CompilationUnit, String>();
+		public String getPathName(IJastAddNode node) {
+			CompilationUnit cu = ((ASTNode) node).compilationUnit();
+			if (this.compilationUnitOriginalPath.containsKey(cu))
+				return this.compilationUnitOriginalPath.get(cu);
+			else
+				return cu.pathName();
+		}
+	}
+	
+}

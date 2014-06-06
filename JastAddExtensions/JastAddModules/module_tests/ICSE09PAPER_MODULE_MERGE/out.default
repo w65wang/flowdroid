@@ -1,0 +1,150 @@
+Arguments: 
+-debug
+-d
+classes
+-instance-module
+myapplication
+myapplication.module
+mysqlbackend.module
+postgresbackend.module
+sqltypes.module
+Main.java
+MySQLQuery.java
+PostgresQuery.java
+ResultSet.java
+../testlib/jastadd$framework.module
+./myapp/Main.java
+End arguments
+----------Module contents----------
+------ResultSet.java------
+module: module sqltypes;;
+module CU : sqltypes.module
+module name : sqltypes
+------------------------
+------myapplication.module------
+module myapplication;
+import own mysqlbackend as none null;
+import own postgresbackend as none null;
+merge mysqlbackend::sqltypes, postgresbackend::sqltypes export as sqltypes;
+------------------------
+------sqltypes.module------
+module sqltypes;
+------------------------
+------PostgresQuery.java------
+module: module postgresbackend;;
+module CU : postgresbackend.module
+module name : postgresbackend
+------------------------
+------./myapp/Main.java------
+module: module myapplication;;
+module CU : myapplication.module
+module name : myapplication
+------------------------
+------Main.java------
+module: null;
+module CU : null
+module name : null
+------------------------
+------postgresbackend.module------
+module postgresbackend;
+import own sqltypes export as sqltypes;
+------------------------
+------MySQLQuery.java------
+module: module mysqlbackend;;
+module CU : mysqlbackend.module
+module name : mysqlbackend
+------------------------
+------mysqlbackend.module------
+module mysqlbackend;
+import own sqltypes export as sqltypes;
+------------------------
+------../testlib/jastadd$framework.module------
+module jastadd$framework;
+------------------------
+----------CU AST before insert----------
+ResultSet.java package:types
+module: myapplication, file: myapplication.module, base module: myapplication
+module: sqltypes, file: sqltypes.module, base module: sqltypes
+PostgresQuery.java package:query
+./myapp/Main.java package:
+Main.java package:
+module: postgresbackend, file: postgresbackend.module, base module: postgresbackend
+MySQLQuery.java package:query
+module: mysqlbackend, file: mysqlbackend.module, base module: mysqlbackend
+module: jastadd$framework, file: ../testlib/jastadd$framework.module, base module: jastadd$framework
+----------CU AST after insert----------
+module: myapplication, file: myapplication.module, base module: myapplication
+	./myapp/Main.java package:myapplication
+module: sqltypes, file: sqltypes.module, base module: sqltypes
+	ResultSet.java package:sqltypes.$types
+Main.java package:
+module: postgresbackend, file: postgresbackend.module, base module: postgresbackend
+	PostgresQuery.java package:postgresbackend.$query
+module: mysqlbackend, file: mysqlbackend.module, base module: mysqlbackend
+	MySQLQuery.java package:mysqlbackend.$query
+module: jastadd$framework, file: ../testlib/jastadd$framework.module, base module: jastadd$framework
+----------Module CU imports before import own----------
+module myapplication, base:myapplication, context:[], instantiated:false
+module sqltypes, base:sqltypes, context:[], instantiated:false
+module postgresbackend, base:postgresbackend, context:[], instantiated:false
+module mysqlbackend, base:mysqlbackend, context:[], instantiated:false
+module jastadd$framework, base:jastadd$framework, context:[], instantiated:false
+-------------Instance ModuleCompilationUnit------------
+module myapplication;
+import own mysqlbackend as none null;
+import own postgresbackend as none null;
+merge mysqlbackend::sqltypes, postgresbackend::sqltypes export as sqltypes;
+export package *;
+-----------End Instance ModuleCompilationUnit----------
+----------CU AST after generateImportOwn----------
+module: myapplication, file: myapplication.module, base module: myapplication
+	./myapp/Main.java package:myapplication
+module: sqltypes, file: sqltypes.module, base module: sqltypes
+	ResultSet.java package:sqltypes.$types
+Main.java package:
+module: postgresbackend, file: postgresbackend.module, base module: postgresbackend
+	PostgresQuery.java package:postgresbackend.$query
+module: mysqlbackend, file: mysqlbackend.module, base module: mysqlbackend
+	MySQLQuery.java package:mysqlbackend.$query
+module: jastadd$framework, file: ../testlib/jastadd$framework.module, base module: jastadd$framework
+module: myapplication$mysqlbackend, file: mysqlbackend.module, base module: mysqlbackend
+	MySQLQuery.java package:myapplication$mysqlbackend.$query
+module: myapplication$postgresbackend, file: postgresbackend.module, base module: postgresbackend
+	PostgresQuery.java package:myapplication$postgresbackend.$query
+module: myapplication.sqltypes, file: sqltypes.module, base module: sqltypes
+	ResultSet.java package:myapplication.sqltypes.$types
+
+----------Module CU imports after import own----------
+module myapplication, base:myapplication, context:[], instantiated:true
+	mysqlbackend:myapplication$mysqlbackend
+	postgresbackend:myapplication$postgresbackend
+	[export]sqltypes:myapplication.sqltypes
+module sqltypes, base:sqltypes, context:[], instantiated:false
+module postgresbackend, base:postgresbackend, context:[], instantiated:false
+module mysqlbackend, base:mysqlbackend, context:[], instantiated:false
+module jastadd$framework, base:jastadd$framework, context:[], instantiated:false
+module myapplication$mysqlbackend, base:mysqlbackend, context:[myapplication], instantiated:true
+	[export]sqltypes:myapplication.sqltypes
+module myapplication$postgresbackend, base:postgresbackend, context:[myapplication], instantiated:true
+	[export]sqltypes:myapplication.sqltypes
+module myapplication.sqltypes, base:sqltypes, context:[myapplication, myapplication$mysqlbackend, myapplication$postgresbackend], instantiated:true
+----------MCU collectTypes after import own----------
+
+Module: myapplication
+	myapplication.Main
+Module: sqltypes
+	sqltypes.$types.ResultSet
+Module: postgresbackend
+	postgresbackend.$query.PostgresQuery
+Module: mysqlbackend
+	mysqlbackend.$query.MySQLQuery
+Module: jastadd$framework
+Module: myapplication$mysqlbackend
+	myapplication$mysqlbackend.$query.MySQLQuery
+Module: myapplication$postgresbackend
+	myapplication$postgresbackend.$query.PostgresQuery
+Module: myapplication.sqltypes
+	myapplication.sqltypes.$types.ResultSet
+
+----------CU iterator----------
+myapplication.module, ./myapp/Main.java, sqltypes.module, Main.java, postgresbackend.module, mysqlbackend.module, ../testlib/jastadd$framework.module, mysqlbackend.module, MySQLQuery.java, postgresbackend.module, PostgresQuery.java, sqltypes.module, ResultSet.java

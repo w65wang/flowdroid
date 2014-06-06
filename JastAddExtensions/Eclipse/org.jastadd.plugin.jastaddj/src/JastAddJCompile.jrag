@@ -1,0 +1,261 @@
+import org.eclipse.core.resources.IMarker;
+
+import org.jastadd.plugin.compiler.ast.IError;
+import org.jastadd.plugin.compiler.recovery.*;
+import org.jastadd.plugin.jastaddj.AST.*;
+import java.io.*;
+
+aspect Compile {
+
+  Program implements org.jastadd.plugin.jastaddj.AST.IProgram;
+  TypeDecl implements org.jastadd.plugin.jastaddj.AST.ITypeDecl;
+  ClassDecl implements org.jastadd.plugin.jastaddj.AST.IClassDecl;  
+  
+  public Collection Program.files() {
+    return options().files();
+  }
+  public void Program.addKeyValueOption(String name) {
+    options().addKeyValueOption(name);
+  }	
+	
+  public void Program.addOptions(String[] options) {
+    options().addOptions(options);
+  }
+
+  public void Program.initOptions() {
+    options().initOptions();
+  }
+  
+
+  // flush 
+  public void Program.flushSourceFiles(java.util.Collection fileNames) {
+    try {
+      flushAttributes();
+    } catch (NullPointerException e) {
+      setCompilationUnitList(new List());
+    }
+    List list = new List();
+    for(int i = 0; i < getNumCompilationUnit(); i++) {
+    	CompilationUnit cu = getCompilationUnit(i);
+    	String pathName = cu.pathName();
+    	if(!cu.fromSource() || !fileNames.contains(pathName)) {
+    		list.add(cu);
+    		files().remove(pathName);
+    	}
+    }
+    setCompilationUnitList(list);
+  }
+  
+  /*
+  public void ASTNode.flushAttributes() {
+    flushCache();
+    for(int i = 0; i < getNumChild(); i++)
+      if(getChildNoTransform(i) != null)
+        getChildNoTransform(i).flushAttributes();
+  }
+  */
+  
+  public void Program.addSourceFile(String name, String contents) {
+    try {
+  	  java.io.InputStream is = new java.io.ByteArrayInputStream(contents.getBytes());
+      CompilationUnit u = javaParser.parse(is, name);
+      is.close();
+       
+      u.setPathName(name);
+      u.setRelativeName(name);
+      u.setFromSource(true);
+      addCompilationUnit(u);
+    } catch(Exception e) {
+    }
+  }
+  
+   public ICompilationUnit Program.addSourceFileWithRecovery(String name, String contents, RecoveryLexer recLexer) throws Exception {
+   		
+		StringBuffer buf = new StringBuffer(contents);
+		
+		int keepOn = 2;
+		CompilationUnit unit = null;
+		while (keepOn > 0) {
+		
+			java.io.InputStream is = new java.io.ByteArrayInputStream(buf.toString().getBytes());
+			try {
+      			unit = javaParser.parse(is, name);
+				is.close();
+				is = null;
+			
+				if (unit.getNumTypeDecl() > 0) {
+			  		File file = new File(name);
+	           		unit.setPathName(file.getAbsolutePath());
+	           		unit.setRelativeName(name);
+	           		unit.setFromSource(true);
+	            
+	    	       	/* TODO: add package name into global list of packages
+	        		String packageName = unit.getPackageDecl();
+            		if(packageName != null && !packages.contains(packageName)) {
+              			packages.add(packageName);
+              			int pos = 0;
+	              		while(packageName != null && -1 != (pos = packageName.indexOf('.', pos + 1))) {
+    	            		String n = packageName.substring(0, pos);
+        	        		if(!packages.contains(n))
+            	      			packages.add(n);
+              			}	
+	            	}
+    	        	*/
+            	
+	        		addCompilationUnit(unit);
+					return unit;
+				}
+			} catch (Throwable e) {
+				/* Catch parse exceptions and try to recover */
+			}
+			
+		
+			if (keepOn > 1) {				
+				SOF sof = recLexer.parse(buf);
+				Recovery.doRecovery(sof);
+				buf = Recovery.prettyPrint(sof);
+				//System.out.println("Recovered to:\n" + buf.toString() + "\n-------");
+			}
+			keepOn--;
+		}
+		
+       	return null;
+      }
+      
+      public class IDEProblem implements org.jastadd.plugin.compiler.ast.IError, org.jastadd.plugin.jastaddj.AST.IProblem {
+      	private Problem problem;
+      	private IProblem.Severity severity;
+      	private IProblem.Kind kind;
+      	public IDEProblem(Problem problem) {
+      		this.problem = problem;
+      		Problem.Severity sev = problem.severity();
+      		if (sev == Problem.Severity.ERROR) {
+      			severity = IProblem.Severity.ERROR;
+      		} else {
+      			severity = IProblem.Severity.WARNING;
+      		}
+      		Problem.Kind k = problem.kind();
+      		if (k == Problem.Kind.LEXICAL) {
+      			kind = IProblem.Kind.LEXICAL;
+      		} else if (k == Problem.Kind.SYNTACTIC) {
+      			kind = IProblem.Kind.SYNTACTIC;
+      		} else if (k == Problem.Kind.SEMANTIC) {
+      			kind = IProblem.Kind.SEMANTIC;
+      		} else {
+      			kind = IProblem.Kind.OTHER;
+      		}
+      	}
+      	public int line() {
+      		return problem.line();
+      	}
+      	public int endLine() {
+      		return problem.endLine();
+      	}
+		public int column() {
+			return problem.column();
+		}
+		public int endColumn() {
+			return problem.endColumn();
+		}
+		public String message() {
+			return problem.message();
+		}
+		public IProblem.Severity severity() {
+			return severity;
+		}
+		public IProblem.Kind kind() {
+			return kind;
+		}
+		
+		public int getLine() {
+			return problem.line();
+		}
+		
+		protected int startOffset = -1;
+		protected int endOffset = -1;
+		
+		public void setStartOffset(int offset) {
+			startOffset = offset;
+		}
+		
+		public void setEndOffset(int offset) {
+			endOffset = offset;
+		}
+		
+		public int getStartOffset() {
+			if (startOffset < 0) 
+				return problem.column();
+			return startOffset;
+		}
+		public int getEndOffset() {
+			if (endOffset < 0)
+				return problem.endColumn();
+			return endOffset;
+		}
+		public String getMessage() {
+			return problem.message();
+		}
+		public int getSeverity() {
+			if (problem.severity() == Problem.Severity.WARNING) {
+				return IMarker.SEVERITY_WARNING;
+			} 
+			return IMarker.SEVERITY_ERROR;
+		}
+		public int getKind() {
+			Problem.Kind k = problem.kind();
+			if (k == Problem.Kind.LEXICAL)
+				return IError.LEXICAL;
+		    else if (k == Problem.Kind.SYNTACTIC)
+		    	return IError.SYNTACTIC;
+		    else if (k == Problem.Kind.SEMANTIC)
+		    	return IError.SEMANTIC;
+		    return IError.OTHER;
+		}
+      }
+      public IDEProblem Problem.createIDEProblem() {
+      	return new IDEProblem(this);
+      }
+      
+      refine ErrorCheck public void CompilationUnit.errorCheck(Collection err, Collection warn) {
+      	collectErrors();
+      	Collection ideErrors = new ArrayList();
+      	for (Iterator itr = errors.iterator(); itr.hasNext();) {
+      		Problem problem = (Problem)itr.next();
+      		ideErrors.add(problem.createIDEProblem());
+      	}
+    	err.addAll(ideErrors);
+    	Collection ideWarnings = new ArrayList();
+    	for (Iterator itr = warnings.iterator(); itr.hasNext();) {
+    		Problem problem = (Problem)itr.next();
+    		ideWarnings.add(problem.createIDEProblem());
+    	}
+    	warn.addAll(ideWarnings);
+      }
+      
+      refine ErrorCheck public Collection CompilationUnit.parseErrors() {
+      	Collection ideErrors = new ArrayList();
+      	for (Iterator itr = parseErrors.iterator(); itr.hasNext();) {
+      		Problem problem = (Problem)itr.next();
+      		ideErrors.add(problem.createIDEProblem());
+      	} 
+      	return ideErrors;
+      }
+      
+      refine ErrorCheck public void ASTNode.error(String s) {
+    	ASTNode node = this;
+    	while(node != null && !(node instanceof CompilationUnit))
+      		node = node.getParent();
+    	CompilationUnit cu = (CompilationUnit)node;
+    	// Removed (getNumChild() != 0) from original version in ErrorCheck.jrag
+    	if(getStart() != 0 && getEnd() != 0) {
+      		int line = getLine(getStart());
+      		int column = getColumn(getStart());
+      		int endLine = getLine(getEnd());
+      		int endColumn = getColumn(getEnd());
+      		cu.errors.add(new Problem(sourceFile(), s, line, column, endLine, endColumn, Problem.Severity.ERROR, Problem.Kind.SEMANTIC));
+    	}
+    	else
+      		cu.errors.add(new Problem(sourceFile(), s, lineNumber(), Problem.Severity.ERROR, Problem.Kind.SEMANTIC));
+  	}
+      
+}

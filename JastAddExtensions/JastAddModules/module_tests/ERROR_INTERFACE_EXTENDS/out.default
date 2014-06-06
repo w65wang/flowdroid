@@ -1,0 +1,10 @@
+m1.module:1,19:
+  Semantic Error: Non-interface modules must not extend interface modules. Use implements instead.
+m1int.module:1,32:
+  Semantic Error: Interface modules must not extend non-interface modules.
+m1int.module:1:
+  Semantic Error: Module interface m1int used in modules m1 is an interface and was not replaced with a non-interface module.
+m1int.module:1,32:
+  Semantic Error: Interface modules must not extend non-interface modules.
+m1int.module:1:
+  Semantic Error: Module interface m1int used in modules m1 is an interface and was not replaced with a non-interface module.

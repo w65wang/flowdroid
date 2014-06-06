@@ -1,0 +1,75 @@
+aspect Domination {
+	
+	// returns true if every path from this statement to goal 
+	// that remains within host passes through halfway
+	syn lazy boolean Stmt.dominates(Block host, Stmt halfway, Stmt goal) circular [true] {
+		if(halfway.contains(this))
+			return true;
+		if(goal.contains(this))
+			return false;
+		for(Iterator i=gsucc(host).iterator();i.hasNext();) {
+			Stmt next = (Stmt)i.next();
+			if(!next.dominates(host, halfway, goal))
+				return false;
+		}
+		return true;
+	}
+	
+	syn lazy boolean Stmt.dominates(Stmt goal) {
+		Block host = hostBlock();
+		if(host == null) return false;
+		// the first() set is always a singleton, but we don't rely on this
+		for(Iterator i=host.first().iterator();i.hasNext();) {
+			Stmt next = (Stmt)i.next();
+			if(!next.dominates(host, this, goal))
+				return false;
+		}
+		return true;
+	}
+	
+	syn lazy boolean Stmt.post_dominates(Stmt origin) {
+		Block host = hostBlock();
+		if(host == null) return false;
+		for(Iterator i=host.exitsAfter(host.getStmt(0)).iterator();i.hasNext();) {
+			Stmt next = (Stmt)i.next();
+			if(!origin.dominates(host, this, next))
+				return false;
+		}
+		return true;
+	}
+	
+	// the exits of a block after a statement are all reachable statements with a
+	// gsucc() outside the block (i.e., throw statements don't count)
+	syn lazy Set Block.exitsAfter(Stmt stmt) circular [Set.empty()] {
+		Set set = Set.empty();
+		for(Iterator i=stmt.gsucc(this).iterator();i.hasNext();) {
+			Stmt next = (Stmt)i.next();
+			if(!this.contains(next))
+				set = set.union(stmt);
+			else
+			    set = set.union(exitsAfter(next));
+		}
+		return set;
+	}
+	
+	inh lazy Block Stmt.hostBlock();
+	
+	eq Block.getStmt().hostBlock() = this;
+	eq ConstructorDecl.getConstructorInvocation().hostBlock() = getBlock();
+	
+	syn int Stmt.indexInHostBlock() = indexInBlock(hostBlock());
+	syn int Stmt.indexInBlock(Block blk) = indexIn(blk.getStmtList());
+	
+	syn lazy Block VariableDeclaration.getBlock() = hostBlock();
+	
+	inh lazy Block ParameterDeclaration.getBlock();
+	eq MethodDecl.getParameter().getBlock() = getBlock();
+	eq ConstructorDecl.getParameter().getBlock() = getBlock();
+	eq CatchClause.getParameter().getBlock() = getBlock();
+	
+	inh boolean Stmt.isInitOrUpdateStmt();
+	
+	eq Program.getChild().isInitOrUpdateStmt() = false;
+	eq ForStmt.getInitStmt().isInitOrUpdateStmt() = true;
+	eq ForStmt.getUpdateStmt().isInitOrUpdateStmt() = true;
+}

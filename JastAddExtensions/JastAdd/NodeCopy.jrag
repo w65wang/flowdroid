@@ -1,0 +1,76 @@
+aspect ASTNodeCopy {
+  syn lazy List ClassDecl.cloneStatementList() {
+    List statements = new List();
+    //ClassName node = (ClassName)super.clone();
+    statements.add(
+      new VariableDeclaration(
+        createQualifiedAccess(),
+        "node",
+        new CastExpr(
+          createQualifiedAccess(),
+          new SuperAccess(
+            "super"
+          ).qualifiesAccess(
+            new MethodAccess(
+              "clone",
+              new List()
+            )
+          )
+        )
+      )
+    );
+    // return node;
+    statements.add(
+      new ReturnStmt(
+        new VarAccess("node")
+      )
+    );
+    // public Object clone() throws CloneNotSupportedException { ... }
+    addMemberMethod(
+      new MethodDecl(
+        new Modifiers(new List().add(new Modifier("public"))),
+        new TypeAccess("Object"),
+        "clone",
+        new List(), // ParameterList
+        new List().add(
+          new TypeAccess("CloneNotSupportedException")
+        ), // Exceptions
+        new Opt(
+          new Block(
+            statements
+          )
+        )
+      )
+    );
+    return statements;
+  }
+
+  public void ClassDecl.addCloneNodeInit(String fieldName, Expr expr) {
+    // insert initialization statement of field in node right before return statement
+    List list = cloneStatementList();
+    list.insertChild(
+      AssignExpr.asStmt(
+        new VarAccess("node").qualifiesAccess(
+          new VarAccess(fieldName)
+        ),
+        expr
+      ),
+      list.getNumChild() - 1
+    );
+  }
+  
+  public void ClassDecl.addCloneNodeInit(Access fieldAccess, Expr expr) {
+    // insert initialization statement of field in node right before return statement
+    List list = cloneStatementList();
+    list.insertChild(
+      AssignExpr.asStmt(
+        new VarAccess("node").qualifiesAccess(
+          fieldAccess
+        ),
+        expr
+      ),
+      list.getNumChild() - 1
+    );
+  }
+  
+}

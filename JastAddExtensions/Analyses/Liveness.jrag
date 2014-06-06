@@ -1,0 +1,77 @@
+aspect Liveness {
+	
+	public boolean Variable.isLiveIn(Block blk) {
+		if(blk.getNumStmt() == 0)
+			return false;
+		return isLiveAfterIn(blk.getStmt(0), blk);
+	}
+	
+	syn lazy boolean Variable.isLiveAfterIn(Stmt stmt, Block blk) circular [false] {
+		if(stmt.mayUse(this)) return true;
+		if(stmt.mustDef(this)) return false;
+		for(Iterator i=stmt.gsucc(blk).iterator();i.hasNext();) {
+			Stmt next = (Stmt)i.next();
+			if(!next.between(blk, -1, Integer.MAX_VALUE))
+				continue;
+			if(isLiveAfterIn(next, blk))
+				return true;
+		}
+		return false;
+	}
+	
+	syn lazy boolean Variable.isLiveAfter(Stmt stmt) circular [false] {
+		Block host = stmt.hostBlock();
+		for(Iterator i=stmt.following().iterator();i.hasNext();) {
+			Stmt next = (Stmt)i.next();
+			if(!next.between(host, -1, Integer.MAX_VALUE))
+				continue;
+			if(isLiveAtOrAfter(next))
+				return true;
+		}
+		return false;
+	}
+	
+	syn lazy boolean Variable.isLiveAtOrAfter(Stmt stmt) circular [false] {
+		if(stmt.mayUse(this)) return true;
+		if(stmt.mayDef(this)) return false;
+		Block host = stmt.hostBlock();
+		for(Iterator i=stmt.gsucc(host).iterator();i.hasNext();) {
+			Stmt next = (Stmt)i.next();
+			if(!next.between(host, -1, Integer.MAX_VALUE))
+				continue;
+			if(isLiveAtOrAfter(next))
+				return true;
+		}
+		return false;
+	}
+	
+	syn lazy boolean LocalDeclaration.accessedOutside(Stmt begin, Stmt end) = 
+		accessedBefore(begin) || accessedAfter(end);
+	
+	syn lazy boolean LocalDeclaration.accessedBefore(Stmt stmt) circular [false] {
+		for(Iterator i=stmt.pred().iterator();i.hasNext();) {
+			Stmt before = (Stmt)i.next();
+			if(!before.between(getBlock(), -1, Integer.MAX_VALUE))
+				continue;
+			if(before.mayTouch(this))
+				return true;
+			if(accessedBefore(before))
+				return true;
+		}
+		return false;
+	}
+	
+	syn lazy boolean LocalDeclaration.accessedAfter(Stmt stmt) circular [false] {
+		for(Iterator i=stmt.succ().iterator();i.hasNext();) {
+			Stmt next = (Stmt)i.next();
+			if(!next.between(getBlock(), -1, Integer.MAX_VALUE))
+				continue;
+			if(next.mayTouch(this))
+				return true;
+			if(accessedAfter(next))
+				return true;
+		}
+		return false;
+	}
+	
+}

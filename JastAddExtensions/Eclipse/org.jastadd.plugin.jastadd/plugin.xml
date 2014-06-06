@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.2"?>
+<plugin>
+	<!-- New Project Wizard -->
+	
+	<extension point = "org.eclipse.ui.newWizards">
+	<wizard id = "org.jastadd.plugin.jastadd.NewProjectWizard"
+		name = "New JastAdd Project"
+		icon = "icons/obj16/ja_fldr_obj.gif"
+		preferredPerspectives = "org.jastadd.plugin.jastaddj.JastAddJPerspective"
+		project = "true"
+		finalPerspective = "org.jastadd.plugin.jastaddj.JastAddJPerspective"
+		class = "org.jastadd.plugin.jastadd.wizards.NewProjectWizard">
+ 		<description>Create a New JastAdd Project</description>
+		<selection class = "org.eclipse.core.resources.IResource"/>
+	</wizard>
+	</extension>
+	
+	<!-- Perspective -->
+	
+	<extension point = "org.eclipse.ui.perspectives">
+	<perspective
+		class = "org.jastadd.plugin.jastadd.perspective.JastAddPerspective"
+		id = "org.jastadd.plugin.jastadd.JastAddPerspective"
+		name = "JastAdd"
+		icon = "icons/obj16/ja_bullet.gif">
+		
+	</perspective>
+	</extension> 	
+	
+
+	<!-- Nature -->
+	
+	<extension point = "org.eclipse.core.resources.natures"
+		id = "org.jastadd.plugin.jastadd.Nature"
+		name = "JastAdd Nature">
+	<runtime>
+		<run class = "org.jastadd.plugin.jastadd.JastAddNature"/>
+	</runtime>
+	<builder id = "org.jastadd.plugin.builder.JastAddBuilder"/>
+	</extension>
+	
+	<!-- JastAddJ Build Configuration -->
+ 
+	<extension point = "org.eclipse.ui.propertyPages">
+	<!--
+	<page
+		objectClass = "org.eclipse.core.resources.IProject"
+		name = "JastAddJ Build Configuration"
+		class = "org.jastadd.plugin.jastaddj.builder.ui.JastAddJBuildConfigurationPropertyPage"		
+		id = "org.jastadd.plugin.jastadd.JastAddBuildConfigurationPropertyPage">
+		<filter
+			name = "nature"
+			value = "org.jastadd.plugin.jastadd.Nature">
+		</filter>
+	</page>
+	-->
+    <page
+       class="org.jastadd.plugin.jastadd.properties.JastAddBuildConfigurationPropertyPage"
+       id="org.jastadd.plugin.jastadd.JastAddFlexBuildConfigurationPropertyPage"
+       name="JastAdd Build Configuration"
+       objectClass="org.eclipse.core.resources.IProject">
+    <filter
+          name="nature"
+          value="org.jastadd.plugin.jastadd.Nature">
+    </filter>
+    </page>
+	</extension>
+
+	<!-- Register the JastAdd model -->
+	
+ 	
+ 	
+ 
+	<extension point = "org.eclipse.ui.editors">
+	<!-- JastAdd Aspect Editor -->
+
+	<editor
+		class = "org.jastadd.plugin.jastadd.editor.aspects.AspectEditor"
+		extensions = "jrag,jadd"
+		icon = "icons/obj16/jrag.gif"
+		id = "org.jastadd.plugin.jastadd.AspectEditor"
+		contributorClass="org.jastadd.plugin.jastadd.editor.aspects.AspectEditorContributor"  
+		name = "JastAdd Aspect Editor">
+	</editor>
+	
+    <!-- JastAdd Grammar Editor -->
+ 	<editor
+		class = "org.jastadd.plugin.jastadd.editor.grammar.ASTEditor"
+		extensions = "ast"
+		icon = "icons/obj16/ast.gif"
+		id = "org.jastadd.plugin.jastadd.ASTEditor"
+		contributorClass="org.jastadd.plugin.jastadd.editor.grammar.ASTEditorContributor"  
+		name = "JastAdd Grammar Editor">
+	</editor>
+	
+	<!-- JFlex Editor -->
+ 	<editor
+		class = "org.jastadd.plugin.jastadd.editor.jflex.JFlexEditor"
+		extensions = "flex"
+		icon = "icons/obj16/flex.gif"
+		id = "org.jastadd.plugin.jastadd.JFlexEditor"
+		contributorClass="org.jastadd.plugin.jastadd.editor.jflex.JFlexEditorContributor"  
+		name = "JFlex Editor">
+	</editor>
+	
+	<!-- Parser Editor -->
+ 	<editor
+		class = "org.jastadd.plugin.jastadd.editor.parser.ParserEditor"
+		extensions = "parser"
+		icon = "icons/obj16/parser.gif"
+		id = "org.jastadd.plugin.jastadd.ParserEditor"
+		contributorClass="org.jastadd.plugin.jastadd.editor.parser.ParserEditorContributor"  
+		name = "Parser Editor">
+	</editor>
+	</extension>
+ <extension
+       point="org.eclipse.ui.views">
+    <category
+          id="org.jastadd.plugin.jastadd.debug"
+          name="JastAdd Debug">
+    </category>
+    <category
+          id="org.jastadd.plugin.jastadd"
+          name="JastAdd">
+    </category>
+    <view
+          allowMultiple="false"
+          category="org.jastadd.plugin.jastadd.debug"
+          class="org.jastadd.plugin.jastadd.debugger.attributes.AttributeView"
+          id="org.jastadd.plugin.jastadd.debugger.attributes.AttributeView"
+          name="Attribute View">
+    </view>
+    <view
+          allowMultiple="false"
+          category="org.jastadd.plugin.jastadd.debug"
+          class="org.jastadd.plugin.jastadd.debugger.attributes.visualization.AttributeVisualizationView"
+          id="org.jastadd.plugin.jastadd.debugger.attributes.visualization.AttributeVisualizationView"
+          name="Attribute Visualization View">
+    </view>
+    <view
+		class = "org.jastadd.plugin.jastadd.explorer.JastAddExplorer"
+		id = "org.jastadd.plugin.jastadd.explorer.JastAddExplorer"
+		icon = "icons/eview16/package.gif"
+		category="org.jastadd.plugin.jastadd"		
+		name = "JastAdd Explorer">
+	 </view>
+ </extension>
+ 
+ <extension
+       point="org.eclipse.ui.popupMenus">
+    <viewerContribution
+          id="org.jastadd.plugin.jastadd.debug.contextmenu"
+          targetID="org.eclipse.debug.ui.VariableView">
+       <action
+             class="org.jastadd.plugin.jastadd.debugger.attributes.visualization.ShowAttributeVisualizationAction"
+             id="org.jastadd.plugin.jastadd.debugger.attributes.visualization.ShowAttributeVisualizationAction"
+             label="Show Attribute Visualization"
+             menubarPath="additions"
+             tooltip="Show the visualization view for a particular node.">
+       </action>
+       <action
+             class="org.jastadd.plugin.jastadd.debugger.attributes.ShowAttributeAction"
+             id="org.jastadd.plugin.jastadd.debugger.attributes.ShowAttributeAction"
+             label="Show Attributes"
+             menubarPath="additions"
+             tooltip="Show the attributes for this particular variable.">
+       </action>
+    </viewerContribution>
+ </extension>
+ 		
+ 	<!-- JastAddJ Breakpoint Management -->
+   
+	<extension point = "org.eclipse.ui.editorActions">
+	<editorContribution
+		targetID = "org.jastadd.plugin.jastadd.AspectEditor"
+		id = "org.jastadd.plugin.jastadd.JastAddJBreakpointRulerActions">
+		<action
+			label = "Add Breakpoint"
+			class = "org.eclipse.debug.ui.actions.RulerToggleBreakpointActionDelegate"
+			actionID = "RulerDoubleClick"
+			id = "org.jastadd.plugin.jastadd.ManageBreakpointRulerAction">
+		</action>
+	</editorContribution>
+	</extension>
+ <extension
+       point="org.jastadd.plugin.compilers">
+    <compiler
+          class="org.jastadd.plugin.jastadd.compiler.JastAddCompiler">
+    </compiler>
+ </extension>
+	
+</plugin>

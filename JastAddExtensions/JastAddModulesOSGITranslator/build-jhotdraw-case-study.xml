@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="jastaddmodules_task_test" default="translate">
+	<property name="org.eclipse.osgi" value="C:/Program Files/eclipse/3.4b/eclipse/plugins/org.eclipse.osgi_3.4.0.v20080605-1900.jar" />
+	<property name="destdir" value="translate.out" />
+
+	<property name="batik1.6" value="../CASE_OSGI_Batik_1.6" />
+	<property name="batik1.8pre" value="../CASE_OSGI_Batik_1.8pre" />
+	<property name="batik1.6jhotdraw" value="../CASE_OSGI_Batik_JHotdraw" />
+	<property name="jhotdraw" value="../CASE_OSGI_JHotdraw" />
+	<property name="sample.draw" value="../CASE_OSGI_JHotdrawSampleDraw" />
+	<property name="sample.net" value="../CASE_OSGI_JHotdrawSampleNet" />
+	<property name="sample.odg" value="../CASE_OSGI_JHotdrawSampleODG" />
+	<property name="sample.pert" value="../CASE_OSGI_JHotdrawSamplePert" />
+	<property name="sample.svg" value="../CASE_OSGI_JHotdrawSampleSVG" />
+	<property name="sample.teddy" value="../CASE_OSGI_JHotdrawSampleTeddy" />
+	<property name="nanoxml" value="../CASE_OSGI_Nanoxml" />
+
+	<taskdef resource="jastaddmodules/translator/anttask/tasks.properties">
+		<classpath>
+			<pathelement path="./bin" />
+			<pathelement path="${org.eclipse.osgi}" />
+		</classpath>
+	</taskdef>
+
+	<target name="translate" depends="clean">
+		<jastaddmodules.osgi.translate destdir="${destdir}">
+			<bundle manifest="${batik1.6}/META-INF/MANIFEST.MF">
+				<fileset dir="${batik1.6}">
+					<include name="**/*.java" />
+				</fileset>
+			</bundle>
+			<bundle manifest="${batik1.8pre}/META-INF/MANIFEST.MF">
+				<fileset dir="${batik1.8pre}">
+					<include name="**/*.java" />
+				</fileset>
+			</bundle>
+			<bundle manifest="${batik1.6jhotdraw}/META-INF/MANIFEST.MF">
+				<fileset dir="${batik1.6jhotdraw}">
+					<include name="**/*.java" />
+				</fileset>
+			</bundle>
+			<bundle manifest="${jhotdraw}/META-INF/MANIFEST.MF">
+				<fileset dir="${jhotdraw}">
+					<include name="**/*.java" />
+				</fileset>
+			</bundle>
+			<bundle manifest="${sample.draw}/META-INF/MANIFEST.MF">
+				<fileset dir="${sample.draw}">
+					<include name="**/*.java" />
+				</fileset>
+			</bundle>
+			<bundle manifest="${sample.net}/META-INF/MANIFEST.MF">
+				<fileset dir="${sample.net}">
+					<include name="**/*.java" />
+				</fileset>
+			</bundle>
+			<bundle manifest="${sample.odg}/META-INF/MANIFEST.MF">
+				<fileset dir="${sample.odg}">
+					<include name="**/*.java" />
+				</fileset>
+			</bundle>
+			<bundle manifest="${sample.pert}/META-INF/MANIFEST.MF">
+				<fileset dir="${sample.pert}">
+					<include name="**/*.java" />
+				</fileset>
+			</bundle>
+			<bundle manifest="${sample.svg}/META-INF/MANIFEST.MF">
+				<fileset dir="${sample.svg}">
+					<include name="**/*.java" />
+				</fileset>
+			</bundle>
+			<bundle manifest="${sample.teddy}/META-INF/MANIFEST.MF">
+				<fileset dir="${sample.teddy}">
+					<include name="**/*.java" />
+				</fileset>
+			</bundle>
+			<bundle manifest="${nanoxml}/META-INF/MANIFEST.MF">
+				<fileset dir="${nanoxml}">
+					<include name="**/*.java" />
+				</fileset>
+			</bundle>
+		</jastaddmodules.osgi.translate>
+		
+		<!--copy data files-->
+		<copy todir="${destdir}/org/jhotdraw/app/action/images">
+			<fileset dir="${jhotdraw}/src/org/jhotdraw/app/action/images" />
+		</copy>
+		<copy todir="${destdir}/org/jhotdraw/app">
+			<fileset dir="${jhotdraw}/src/org/jhotdraw/app">
+				<include name="*.properties" />
+			</fileset>
+		</copy>
+		<copy todir="${destdir}/org/jhotdraw/draw/action/images">
+			<fileset dir="${jhotdraw}/src/org/jhotdraw/draw/action/images" />
+		</copy>
+		<copy todir="${destdir}/org/jhotdraw/undo">
+			<fileset dir="${jhotdraw}/src/org/jhotdraw/undo">
+				<include name="*.properties" />
+			</fileset>
+		</copy>
+		<copy todir="${destdir}/org/jhotdraw/undo/images">
+			<fileset dir="${jhotdraw}/src/org/jhotdraw/undo/images">
+				<include name="*.png" />
+			</fileset>
+		</copy>
+		<copy todir="${destdir}/org/jhotdraw/draw">
+			<fileset file="${jhotdraw}/src/org/jhotdraw/draw/Label*.properties" />
+		</copy>
+		<copy todir="${destdir}/org/jhotdraw/app">
+			<fileset file="${jhotdraw}/src/org/jhotdraw/app/Label*.properties" />
+		</copy>
+		<copy todir="${destdir}/org/jhotdraw/samples/draw">
+			<fileset file="${sample.draw}/src/org/jhotdraw/samples/draw/Label*.properties" />
+		</copy>
+		
+		<copy todir="${destdir}/org/jhotdraw/samples/svg">
+			<fileset file="${sample.svg}/src/org/jhotdraw/samples/svg/Label*.properties" />
+		</copy>
+		
+        <copy todir="${destdir}/org/jhotdraw/samples/net">
+            <fileset file="${sample.net}/src/org/jhotdraw/samples/net/Label*.properties"/>
+        </copy>
+        <copy todir="${destdir}/org/jhotdraw/samples/net/images">
+            <fileset file="${sample.net}/src/org/jhotdraw/samples/net/images/*.png"/>
+        </copy>
+		
+        <copy todir="${destdir}/org/jhotdraw/samples/odg">
+            <fileset file="${sample.odg}/src/org/jhotdraw/samples/odg/Label*.properties"/>
+        </copy>
+		
+        <copy todir="${destdir}/org/jhotdraw/samples/pert">
+            <fileset file="${sample.pert}/src/org/jhotdraw/samples/pert/Label*.properties"/>
+        </copy>
+        <copy todir="${destdir}/org/jhotdraw/samples/pert/images">
+            <fileset file="${sample.pert}/src/org/jhotdraw/samples/pert/images/*.png"/>
+        </copy>
+		
+        <copy todir="${destdir}/org/jhotdraw/samples/teddy">
+            <fileset file="${sample.teddy}/src/org/jhotdraw/samples/teddy/Label*.properties"/>
+        </copy> 
+	</target>
+
+	<target name="clean">
+		<delete dir="${destdir}" quiet="true" />
+	</target>
+
+</project>

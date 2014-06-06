@@ -1,0 +1,601 @@
+aspect Rewrites {
+  eq RewriteDecl.getAccess().nameType() = NameType.TYPE_NAME;
+  eq RewriteListDecl.getParentType().nameType() = NameType.TYPE_NAME;
+  eq RewriteListDecl.getChildName().nameType() = NameType.METHOD_NAME;
+
+  eq Rewrite.getAccess().nameType() = NameType.TYPE_NAME;
+
+  eq Rewrite.getBlock().returnType() = getAccess().type();
+
+  eq RewriteDecl.getChild().thisType() = introducedType();
+  
+  // Satisfy reachability analysis for rewrite clauses
+  eq RewriteDecl.getRewrite().reachable() = true;
+
+  eq RewriteDecl.getRewrite().inStaticContext() = false;
+
+  inh TypeDecl RewriteDecl.astNode();
+
+  public void RewriteDecl.typeCheck() {
+    super.typeCheck();
+    if(!introducedType().isAnASTNode() || introducedType() == astNode())
+      error("only subclasses of ASTNode can be rewritten");
+  }
+
+  // Maps TypeDecl -> RewriteDecl
+  syn lazy Map Program.rewritesMap() {
+    Map map = new HashMap();
+    collectRewrites(map);
+    return map;
+  }
+  // Generic traversal that collects rewrites
+  protected void ASTNode.collectRewrites(Map map) {
+    for(int i = 0; i < getNumChild(); i++)
+      getChild(i).collectRewrites(map);
+  }
+
+  // Collect rewrites in AspectDecl
+  syn lazy Map AspectDecl.rewritesMap() {
+    Map map = new HashMap();
+    collectRewrites(map);
+    return map;
+  }
+  
+  // Override and add self when rewrite
+  protected void RewriteDecl.collectRewrites(Map map) {
+    TypeDecl introducedType = introducedType();
+    if(!map.containsKey(introducedType))
+      map.put(introducedType, new ArrayList(1));
+    Collection c = (Collection)map.get(introducedType);
+    c.add(this);
+  }
+
+  // Set of rewrites for this ClassDecl
+  syn lazy Collection ClassDecl.rewrites() = lookupRewrites(this);
+  inh Collection ClassDecl.lookupRewrites(TypeDecl typeDecl);
+  eq Program.getCompilationUnit(int i).lookupRewrites(TypeDecl typeDecl) = rewritesMap().containsKey(typeDecl) ? (Collection)rewritesMap().get(typeDecl) : new ArrayList(0);
+
+
+
+  
+
+  void AspectDecl.collectIntertypeDecls(HashMap map) {
+    TypeDecl typeDecl = astNode();
+    if(!map.containsKey(typeDecl))
+      map.put(typeDecl, new ArrayList());
+    Collection c = (Collection)map.get(typeDecl);
+    MethodDecl m = duringMethod();
+    super.collectIntertypeDecls(map);
+  }
+
+  private MethodDecl AspectDecl.duringMethod = null;
+  syn lazy MethodDecl AspectDecl.duringMethod() {
+    if(duringMethod != null) return duringMethod;
+    FieldDeclaration field = duringCounter();
+    MethodDecl method = 
+      new IntertypeMethodDecl(
+        new Modifiers(new List().add(new Modifier("public")).add(new Modifier("static")).add(new Modifier("synthetic"))),
+        new PrimitiveTypeAccess("boolean"),
+        "during" + name(),
+        new List(),
+        new List(),
+        new Opt(
+          new Block(
+            new List().add(
+              new IfStmt(
+                new EQExpr(
+                  field.createBoundFieldAccess(),
+                  new IntegerLiteral(0)
+                ),
+                new ReturnStmt(new BooleanLiteral(false)),
+                new Block(
+                  new List().add(
+                    new ExprStmt(
+                      new VarAccess("state").qualifiesAccess(
+                        new MethodAccess(
+                          "pop",
+                          new List()
+                        )
+                      )
+                    )
+                  ).add(
+                    new ExprStmt(
+                      new VarAccess("state").qualifiesAccess(
+                        new MethodAccess(
+                          "push",
+                          new List().add(
+                            astNodeState().createQualifiedAccess().qualifiesAccess(
+                              new VarAccess("REWRITE_INTERRUPT")
+                            )
+                          )
+                        )
+                      )
+                    )
+                  ).add(
+                    new ReturnStmt(new BooleanLiteral(true))
+                  )
+                )
+              )
+            )
+          )
+        ),
+        astNode().createQualifiedAccess()
+      );
+    return duringMethod = addMemberMethod(method);
+  }
+
+  private FieldDeclaration AspectDecl.duringCounter = null; 
+  syn lazy FieldDeclaration AspectDecl.duringCounter() {
+    // protected static int duringAspectName = 0;
+    if(duringCounter != null) return duringCounter;
+    TypeDecl typeDecl = astNode();
+    for(int i = 0; i < typeDecl.getNumBodyDecl(); i++)
+      if(typeDecl.getBodyDecl(i) instanceof FieldDeclaration && ((FieldDeclaration)typeDecl.getBodyDecl(i)).name().equals("during" + name()))
+        return duringCounter = (FieldDeclaration)typeDecl.getBodyDecl(i);
+    FieldDeclaration field =
+      new FieldDeclaration(
+        new Modifiers(new List().add(new Modifier("public")).add(new Modifier("static")).add(new Modifier("synthetic"))),
+        new TypeAccess("int"),
+        "during" + name(),
+        new IntegerLiteral(0)
+      );
+    return duringCounter = typeDecl.addMemberField(field);
+    /*
+    typeDecl.addMemberMethod(
+      // protected static boolean duringAspectName() {
+      //   if(duringAspectName == 0)
+      //     return false;
+      //   else {
+      //     state.pop();
+      //     state.push(ASTNode$State.REWRITE_INTERRUPT);
+      //     return true;
+      //   }
+      // }
+      new MethodDecl(
+        new Modifiers(new List().add(new Modifier("protected")).add(new Modifier("static"))),
+        new PrimitiveTypeAccess("boolean"),
+        "during" + name(),
+        new List(),
+        new List(),
+        new Opt(
+          new Block(
+            new List().add(
+              new IfStmt(
+                new EQExpr(
+                  field.createBoundFieldAccess(),
+                  new IntegerLiteral(0)
+                ),
+                new ReturnStmt(new BooleanLiteral(false)),
+                new Block(
+                  new List().add(
+                    new ExprStmt(
+                      new VarAccess("state").qualifiesAccess(
+                        new MethodAccess(
+                          "pop",
+                          new List()
+                        )
+                      )
+                    )
+                  ).add(
+                    new ExprStmt(
+                      new VarAccess("state").qualifiesAccess(
+                        new MethodAccess(
+                          "push",
+                          new List().add(
+                            typeDecl.createQualifiedAccess().qualifiesAccess(
+                              new VarAccess("REWRITE_INTERRUPT")
+                            )
+                          )
+                        )
+                      )
+                    )
+                  ).add(
+                    new ReturnStmt(new BooleanLiteral(true))
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+    */
+  }
+
+  inh FieldDeclaration Rewrite.duringCounter();
+  eq AspectDecl.getBodyDecl(int i).duringCounter() = duringCounter();
+  eq Program.getCompilationUnit(int i).duringCounter() { throw new Error("inherited attribute duringCounter does not have an equation"); }
+
+  // Generate rewrite code for this ClassDecl
+  refine IntertypeFieldCodegeneration public void ClassDecl.generateIntertypeDecls() {
+    refined();
+    if(isAnASTNode() && astNode() != this) {
+      List statements = new List();
+      for(Iterator iter = rewrites().iterator(); iter.hasNext(); ) {
+        RewriteDecl r = (RewriteDecl)iter.next();
+        for(int i = 0; i < r.getNumRewrite(); i++)
+          r.getRewrite(i).addTestAndRewrite(statements);
+      }
+      addDelegationRewriteTo(statements);
+      addRewriteMethodDecl(statements);
+      addMayHaveRewrite();
+
+      addCloneNodeInit("in$Circle", new BooleanLiteral(false));
+      addCloneNodeInit("is$Final", new BooleanLiteral(false));
+
+      if(this instanceof ASTDecl) {
+        ASTDecl node = (ASTDecl)this;
+        if(localMethodsSignature("getNumChild()").isEmpty())
+          node.addGetNumChild();
+        node.addFinalRootNode();
+        if(localMethodsSignature("getChild(int)").isEmpty())
+          node.addNTAGetChildNoTransform();
+      }
+    }
+  }
+
+  syn lazy boolean TypeDecl.mayHaveRewriteRule() = false;
+  eq ClassDecl.mayHaveRewriteRule() = !rewrites().isEmpty() || (hasSuperclass() && superclass().mayHaveRewriteRule());
+
+  private void ClassDecl.addMayHaveRewrite() {
+    List statements = new List();
+    if(this == listNode())
+      statements.add(
+        new ExprStmt(new MethodAccess("getNumChild", new List()))
+      );
+    statements.add(
+      new ReturnStmt(new BooleanLiteral(mayHaveRewriteRule()))
+    );
+
+    addMemberMethod(
+      new MethodDecl(
+        new Modifiers(new List().add(new Modifier("public"))),
+        new TypeAccess("boolean"),
+        "mayHaveRewrite",
+        new List(),
+        new List(),
+        new Opt(
+          new Block(statements)
+        )
+      )
+    );
+  }
+
+  void ASTDecl.addFinalRootNode() {
+    if(isRootNode())
+      addBodyDecl(
+        new InstanceInitializer(
+          new Block(
+            new List().add(
+              AssignExpr.asStmt(
+                new VarAccess("is$Final"),
+                new BooleanLiteral(true)
+              )
+            )
+          )
+        )
+      );
+  }
+
+  void ASTDecl.addGetNumChild() {
+    int n = 0;
+    for(Iterator iter = components().iterator(); iter.hasNext(); ) {
+      ASTChild c = (ASTChild)iter.next();
+      if(!c.isNTA() && !(c instanceof ASTTokenChild)) // For consistency with old version of JastAdd
+      //if(!(c instanceof ASTTokenChild))
+        n++;
+    }
+    addMemberMethod(
+      new MethodDecl(
+        //new Modifiers(new List().add(new Modifier("public"))),
+        //new TypeAccess("int"),
+        //"getNumChild",
+        new Modifiers(new List().add(new Modifier("protected"))),
+        new TypeAccess("int"),
+        "numChildren",
+        new List(),
+        new List(),
+        new Opt(
+          new Block(
+            new List().add(
+              new ReturnStmt(new IntegerLiteral(n))
+            )
+          )
+        )
+      )
+    );
+  }
+
+  inh boolean Rewrite.isListRewrite();
+  eq RewriteDecl.getRewrite(int i).isListRewrite() = false;
+  eq RewriteListDecl.getRewrite(int i).isListRewrite() = true;
+  
+  inh TypeDecl Rewrite.parentNodeType();
+  eq RewriteDecl.getRewrite(int i).parentNodeType() {
+    throw new Error("parentNodeType not implemented for " + getClass().getName()); 
+  }
+  eq RewriteListDecl.getRewrite(int i).parentNodeType() = getParentType().type();
+  
+  inh MethodDecl Rewrite.childMethod();
+  eq RewriteDecl.getRewrite(int i).childMethod() {
+    throw new Error("childMethod not implemented for " + getClass().getName()); 
+  }
+  eq RewriteListDecl.getRewrite(int i).childMethod() = ((MethodAccess)getChildName()).decl();
+
+  public abstract Expr Rewrite.createCondition();
+
+  public Expr ConditionalRewrite.createCondition() {
+    if(!isListRewrite()) {
+      return (Expr)getExpr().fullCopy();
+    }
+    else {
+      return new AndLogicalExpr(
+        new AndLogicalExpr(
+          // getParent().getParent() instanceof ParentType
+          createCheckParentType(),
+          // ((ParentType)getParent().getParent()).getChildNameListNoTransform() == getParent()
+          createCheckCorrectChild()
+        ),
+        (Expr)getExpr().fullCopy()
+      );
+    }
+  }
+  public Expr UnconditionalRewrite.createCondition() {
+    if(!isListRewrite()) {
+      return new BooleanLiteral(true);
+    }
+    else {
+      return new AndLogicalExpr(
+        new AndLogicalExpr(
+          // getParent().getParent() instanceof ParentType
+          createCheckParentType(),
+          // ((ParentType)getParent().getParent()).getChildNameListNoTransform() == getParent()
+          createCheckCorrectChild()
+        ),
+        new BooleanLiteral(true)
+      );
+    }
+  }
+
+  syn lazy MethodDecl Rewrite.createTransformMethod() {
+    Modifiers m = new Modifiers(new List().add(new Modifier("public")).add(new Modifier("static")));
+    String name = "rewrite$transform$" + hostType().rewriteCounter++;
+    List parameters = new List().add(new ParameterDeclaration(introducedType().createQualifiedAccess(), "this$"));
+    Access returnType = (isListRewrite() ? listNode() : astNode()).createQualifiedAccess();
+    // public static ASTNode rewrite$transform$1(ASTNode self) ... BLOCK ...
+    MethodDecl decl = new IntroducedMethodDecl(m, returnType, name, parameters, new List(), new Opt(getBlock().fullCopy()), introducedType(), enclosingBodyDecl());
+
+    if(options().hasOption("-weave_inline") && !introducedType().isInterfaceDecl())
+      return introducedType().addMemberMethod(decl);
+    else
+      return enclosingBodyDecl().hostType().addMemberMethod(decl);
+  }
+  public int TypeDecl.rewriteCounter;
+  inh TypeDecl Rewrite.hostType();
+  inh BodyDecl Rewrite.enclosingBodyDecl();
+
+  public void Rewrite.addTestAndRewrite(List statements) {
+    /*
+    if(isListRewrite()) {
+      // replace return x with getParent().insertList(x, getParent().getIndexOfChild(this))
+      getBlock().replaceReturnStmts();
+    }
+    */
+    // if(expr) { ... return node; }
+    FieldDeclaration field = duringCounter();
+    Expr init;
+    if(!isListRewrite()) {
+      init = createTransformMethod().createBoundAccess(new List().add(new ThisAccess()));
+    }
+    else {
+      init = 
+          new MethodAccess(
+            "getParent",
+            new List()
+          ).qualifiesAccess(
+            new MethodAccess(
+              "insertList",
+              new List().add(
+                createTransformMethod().createBoundAccess(new List().add(new ThisAccess()))
+              ).add(
+                new MethodAccess(
+                  "getParent",
+                  new List()
+                ).qualifiesAccess(
+                  new MethodAccess(
+                    "getIndexOfChild",
+                    new List().add(new ThisAccess("this"))
+                  )
+                )
+              )
+            )
+          );
+    }
+
+    List transformBody = new List();
+    // during++
+    transformBody.add(new ExprStmt(new PostIncExpr(field.createBoundFieldAccess())));
+    // ASTNode result = rewrite$transform$0(this);
+    transformBody.add(
+      new VariableDeclaration(
+        astNode().createQualifiedAccess(),
+        "result",
+        init
+      )
+    );
+    // during--
+    transformBody.add(new ExprStmt(new PostDecExpr(field.createBoundFieldAccess())));
+
+    statements.add(
+      new IfStmt(
+        createCondition(),
+        new Block(
+          new List().add(new ExprStmt(new PostIncExpr(field.createBoundFieldAccess()))
+          ).add(new VariableDeclaration(astNode().createQualifiedAccess(), "result", init)
+          ).add(new ExprStmt(new PostDecExpr(field.createBoundFieldAccess()))
+          ).add(new ReturnStmt(new VarAccess("result")))
+        )
+      )
+    );
+  }
+  
+  // getParent().getParent() instanceof ParentType
+  protected Expr Rewrite.createCheckParentType() {
+    return new InstanceOfExpr(
+      new MethodAccess(
+        "getParent",
+        new List()
+      ).qualifiesAccess(
+        new MethodAccess(
+          "getParent",
+          new List()
+        )
+      ),
+      parentNodeType().createQualifiedAccess()
+    );
+  }
+  
+  // ((ParentType)getParent().getParent()).getChildNameListNoTransform() == getParent()
+  protected Expr Rewrite.createCheckCorrectChild() {
+    return new EQExpr(
+      new ParExpr(
+        new CastExpr(
+          parentNodeType().createQualifiedAccess(),
+          new MethodAccess(
+            "getParent",
+            new List()
+          ).qualifiesAccess(
+            new MethodAccess(
+              "getParent",
+              new List()
+            )
+          )
+        )
+      ).qualifiesAccess(
+        new MethodAccess(
+          childMethod().name() + "ListNoTransform",
+          new List()
+        )
+      ),
+      new MethodAccess(
+        "getParent",
+        new List()
+      )
+    );
+  }
+  
+  // replace return x with getParent().insertList(x, getParent().getIndexOfChild(this))
+  protected void ASTNode.replaceReturnStmts() {
+    for(int i = 0; i < getNumChild(); i++)
+      getChild(i).replaceReturnStmts();
+  }
+  protected void ReturnStmt.replaceReturnStmts() {
+    if(hasResult()) {
+      setResult(
+        new MethodAccess(
+          "getParent",
+          new List()
+        ).qualifiesAccess(
+          new MethodAccess(
+            "insertList",
+            new List().add(
+              getResult()
+            ).add(
+              new MethodAccess(
+                "getParent",
+                new List()
+              ).qualifiesAccess(
+                new MethodAccess(
+                  "getIndexOfChild",
+                  new List().add(new ThisAccess("this"))
+                )
+              )
+            )
+          )
+        )
+      );
+    }
+  }
+  
+  private void ClassDecl.addDelegationRewriteTo(List statements) {
+    // return super.rewriteTo();
+    statements.add(
+      new ReturnStmt(
+        new SuperAccess(
+          "super"
+        ).qualifiesAccess(
+          new MethodAccess(
+            "rewriteTo",
+            new List()
+          )
+        )
+      )
+    );
+  }
+  private void ClassDecl.addRewriteMethodDecl(List statements) {
+    // public ASTNode rewriteTo() { statements }
+    addMemberMethod(
+      new MethodDecl(
+        new Modifiers(new List().add(new Modifier("public"))),
+        astNode().createQualifiedAccess(),
+        "rewriteTo",
+        new List(),
+        new List(),
+        new Opt(
+          new Block(
+            statements
+          )
+        )
+      )
+    );
+  }
+
+
+  public void RewriteDecl.toString(StringBuffer s) {
+    s.append(indent());
+    s.append("/*");
+    s.append("rewrite ");
+    getAccess().toString(s);
+    s.append(" {");
+    for(int i = 0; i < getNumRewrite(); i++)
+      getRewrite(i).toString(s);
+    s.append(indent() + "}");
+    s.append("*/");
+  }
+
+  public void UnconditionalRewrite.toString(StringBuffer s) {
+    s.append(indent());
+    s.append("to ");
+    getAccess().toString(s);
+    s.append(" ");
+    getBlock().toString(s);
+  }
+  public void ConditionalRewrite.toString(StringBuffer s) {
+    s.append(indent());
+    s.append("when(");
+    getExpr().toString(s);
+    s.append(")\n");
+    s.append(indent() + "to ");
+    getAccess().toString(s);
+    s.append(" ");
+    getBlock().toString(s);
+  }
+
+
+
+  eq RewriteListDecl.getChildName().lookupMethod(String name) = 
+    getParentType().type().memberMethods(name);
+  eq RewriteListDecl.getChildName().lookupVariable(String name) = 
+    getParentType().type().memberFields(name);
+
+  eq RewriteDecl.getRewrite(int index).lookupMethod(String name) = 
+    introducedType().memberMethods(name);
+  eq RewriteDecl.getRewrite(int index).lookupVariable(String name) =
+    introducedType().memberFields(name);
+
+  eq RewriteDecl.getRewrite(int index).hostType() = introducedType();
+  
+  syn lazy TypeDecl RewriteDecl.introducedType() = getAccess().type().sourceTypeDecl();
+  eq RewriteDecl.getRewrite(int index).introducedType() = introducedType();
+  inh TypeDecl Rewrite.introducedType();
+}

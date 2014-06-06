@@ -1,0 +1,208 @@
+//STANDING NOTE: Make VERY sure that all JAModule passes before the java 
+//errorcheck DO NOT TOUCH any AST nodes below CompilationUnit to avoid 
+//the REWRITES
+
+
+aspect Debug {
+
+	//JAModule contents
+	public StringBuffer ASTNode.toStringJAModules(StringBuffer s) {
+		for (int i = 0 ; i < getNumChild(); i++) {
+			getChild(i).toStringJAModules(s);
+		}
+		return s;
+	}
+	public StringBuffer ModuleCompilationUnit.toStringJAModules(StringBuffer s) {
+		s.append("------" + this.relativeName() + "------\n");
+		for (int i = 0 ; i < getNumChild(); i++) {
+			getChild(i).toStringJAModules(s);
+		}
+		s.append("------------------------\n");
+		return s;
+	}
+	public StringBuffer ModuleDecl.toStringJAModules(StringBuffer s) {
+		s.append(this.toString() + "\n");
+		return s;
+	}
+	public StringBuffer ModuleImportDecl.toStringJAModules(StringBuffer s) {
+		s.append(this.toString() + "\n");
+		return s;
+	}
+	public StringBuffer ModuleMergeDecl.toStringJAModules(StringBuffer s) {
+		s.append(this.toString() + "\n");
+		return s;
+	}
+	public StringBuffer CompilationUnit.toStringJAModules(StringBuffer s) {
+		if (!fromSource()) {
+			return s;  
+		}
+		s.append("------" + this.relativeName() + "------\n");
+		s.append("module: " + getModuleDecl() + ";\n");
+		ModuleCompilationUnit moduleCU = lookupModuleCUNoTransform();
+		String moduleCUPath = null;
+		String moduleName = null;
+		if (lookupModuleCUNoTransform() != null) {
+			moduleCUPath = moduleCU.relativeName();
+			moduleName = moduleCU.getModuleName();
+		}
+		if (isGeneratedFromAST()) {
+			s.append("Original AST file: " + getOrigASTCompilationUnit().relativeName() + "\n");
+		}
+		s.append("module CU : " + moduleCUPath + "\n");
+		s.append("module name : " + moduleName + "\n");
+		s.append("------------------------\n");
+		return s;
+	}
+	
+	
+	
+	//AST consisting of Compilation units
+	public StringBuffer ASTNode.toStringJAModuleCUAST(int level, StringBuffer s) {
+		for (int i = 0 ; i < getNumChild(); i++) {
+			getChild(i).toStringJAModuleCUAST(level, s);
+		}
+		return s;
+	}
+	//STANDING NOTE: DO NOT go down below CompilationUnit to avoid
+	//the rewrites
+	public StringBuffer CompilationUnit.toStringJAModuleCUAST(int level, StringBuffer s) {
+		if (!fromSource()) {
+			return s;
+		}
+		for (int i = 0; i < level; i++) {
+			s.append("\t");
+		}
+		s.append(this.relativeName() + " package:" + packageName() + "\n");
+		return s;
+	}
+	public StringBuffer ModuleCompilationUnit.toStringJAModuleCUAST(int level, StringBuffer s) {
+		for (int i = 0; i < level; i++) {
+			s.append("\t");
+		}
+		s.append("module: " + getModuleName() + 
+			", file: " + this.relativeName() + 
+			", base module: " + this.getBaseCU().getModuleName() + "\n");
+		
+		for (int i = 0 ; i < getNumChild(); i++) {
+			getChild(i).toStringJAModuleCUAST(level + 1, s);
+		}
+		return s;
+	}
+	
+	
+	
+	public StringBuffer ASTNode.toStringJAModuleCUImports(StringBuffer s) {
+		for (int i = 0 ; i < getNumChild(); i++) {
+			getChild(i).toStringJAModuleCUImports(s);
+		}
+		return s;
+	}
+	//STANDING NOTE: Cut off at CompilationUnit to avoid the f-ing rewrites
+	public StringBuffer CompilationUnit.toStringJAModuleCUImports(StringBuffer s) {
+		return s;
+	}
+	public StringBuffer ModuleCompilationUnit.toStringJAModuleCUImports(StringBuffer s) {
+		String contextString = "";
+		SortedSet<String> instanceContextNames = new TreeSet<String>(new Comparator<String>() {
+			public int compare(String x, String y) {
+				return x.compareTo(y);
+			}
+		});
+		for (ModuleCompilationUnit cu : getInstanceContext()) {
+			instanceContextNames.add(cu.getModuleName());
+		}
+		contextString += instanceContextNames.toString();
+		
+		s.append("module " + getModuleName() + 
+			", base:" + getBaseCU().getModuleName() + 
+			", context:" + contextString +  
+			", instantiated:" + moduleInstantiated + "\n");
+		
+		boolean first = true;
+		SortedSet<String> localAliasNames = new TreeSet<String>(new Comparator<String>() {
+			public int compare(String x, String y) {
+				return x.compareTo(y);
+			}
+		});
+		localAliasNames.addAll(getModuleReferenceMap().keySet());
+		for (String localAlias : localAliasNames) {
+			ModuleCompilationUnit importedCU = getModuleReference(localAlias).getModuleCU();
+			String exportStr;
+			if (getModuleReference(localAlias).isExported()) {
+				exportStr = "[export]";
+			} else {
+				exportStr = "";
+			}
+			s.append("\t" + exportStr + localAlias + ":" + importedCU.getModuleName() + "\n");
+		} 
+		return s;
+	}
+	public String ASTNode.toStringJAModuleCUImports() {
+		StringBuffer s = new StringBuffer();
+		toStringJAModuleCUImports(s);
+		return s.toString();
+	}
+	
+	
+	
+	public String Program.toStringCompilationUnitIterator() {
+		String result = "";
+		boolean first = true;
+		for (Iterator i = compilationUnitIterator(); i.hasNext(); ) {
+			CompilationUnit cu = (CompilationUnit) i.next();
+			if (cu.fromSource()) {
+				if (!first) {
+					result += ", ";
+				}
+				result += cu.relativeName();
+				first = false;
+			}
+		}
+		return result;
+	}
+	
+	public StringBuffer Program.toStringCompilationUnitImports() {
+		return toStringCompilationUnitImports(new StringBuffer());
+	}
+	public StringBuffer Program.toStringCompilationUnitImports(StringBuffer s) {
+		for (Iterator i = compilationUnitIterator(); i.hasNext(); ) {
+			CompilationUnit cu = (CompilationUnit) i.next();
+			cu.toStringCompilationUnitImports(s);
+		}
+		return s;
+	}
+	public StringBuffer CompilationUnit.toStringCompilationUnitImports(StringBuffer s) {
+		s.append("CompilationUnit: " + this.relativeName()+ "\n");
+		s.append("Module : " + this.getModuleDecl() + "\n");
+		for (ImportDecl importDecl : getImportDeclList()) {
+			importDecl.toString(s);
+		}
+		return s;
+	}
+	public StringBuffer ModuleCompilationUnit.toStringCompilationUnitImports(StringBuffer s) {
+		return s;
+	}
+	
+	public String Program.toStringModuleMemberTypes() {
+		String ret = "";
+		for (Iterator i = compilationUnitIterator(); i.hasNext(); ) {
+			CompilationUnit cu = (CompilationUnit) i.next();
+			if (cu instanceof ModuleCompilationUnit) {
+				ret += ((ModuleCompilationUnit) cu).toStringModuleMemberTypes();
+			}
+		}
+		return ret;
+	}
+	public String ModuleCompilationUnit.toStringModuleMemberTypes() {
+		return toStringModuleMemberTypes(new StringBuffer()).toString();
+	}
+	public StringBuffer ModuleCompilationUnit.toStringModuleMemberTypes(StringBuffer s) {
+		s.append("Module: " + getModuleName() + "\n");
+		for (Iterator i = moduleMemberTypes().iterator(); i.hasNext(); ) {
+			TypeDecl type = (TypeDecl)i.next();
+			s.append("\t" + type.packageName() + "." + type.name() + "\n");
+		}
+		return s;
+	}
+
+}

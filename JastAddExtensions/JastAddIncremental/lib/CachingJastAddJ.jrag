@@ -1,0 +1,43 @@
+aspect CachingJastAddJ {
+  CompilationUnit implements Caching.CacheRoot;
+  public void CompilationUnit.propagate() {
+    if(!incremental || flushing)
+      return;
+    flushing = true;
+    invalidate();
+    flushCaches();
+    flushing = false;
+  }
+  private int CompilationUnit.last_flushed = 0;
+  public int CompilationUnit.getLastFlushed() { return last_flushed; }
+  public void CompilationUnit.invalidate() { ++last_flushed; }
+  public boolean CompilationUnit.incremental(boolean flag) { 
+    boolean res = incremental;
+    incremental = flag; 
+    return res;
+  }
+
+  Program implements Caching.CacheRoot;
+  private int Program.last_flushed = 0;
+  public void Program.propagate() {
+    if(!incremental || flushing)
+      return;
+    flushing = true;
+    invalidate();
+    flushCaches();
+    flushing = false;
+  }
+  public int Program.getLastFlushed() { return last_flushed; }
+  public void Program.invalidate() {
+    ++last_flushed;
+  }
+  public void Program.flushCaches() {
+    flushCache();
+    getChildNoTransform(0).flushCache();
+  }
+  public boolean Program.incremental(boolean flag) {
+    boolean res = incremental;
+    incremental = flag; 
+    return res;
+  }
+}

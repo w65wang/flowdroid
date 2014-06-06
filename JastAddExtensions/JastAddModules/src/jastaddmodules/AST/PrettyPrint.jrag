@@ -1,0 +1,137 @@
+aspect PrettyPrint {
+	public void ModuleCompilationUnit.toString(StringBuffer s) {
+		getModuleDecl().toString(s);
+		s.append("\n");
+		for (ModuleMemberDecl decl : getModuleMemberDeclList()) {
+			decl.toString(s);
+			s.append("\n");
+		}
+	}
+	public void ModuleDecl.toString(StringBuffer s) {
+		s.append("module ");
+		getModuleAccess().toString(s);
+		if (hasExtends()) {
+			s.append(" extends ");
+			getExtends().toString(s);
+		}
+		if (getImplementsList().getNumChild() > 0) {
+			s.append (" implements ");
+			boolean first = true;
+			for (ModuleAccess ma : getImplementsList()) {
+				if (!first) { 
+					s.append(", ");
+				}
+				ma.toString(s);
+				first = false;
+			}
+		}
+		s.append(";");
+	}
+	
+	
+	public void ModuleAccess.toString(StringBuffer s) {
+		s.append(getID());
+	}
+	public void NullModuleAccess.toString(StringBuffer s) {
+		s.append("null");
+	}
+	
+	public void ModuleImportDecl.toString(StringBuffer s) {
+		s.append("import ");
+		getModuleImportType().toString(s);
+		s.append(" ");
+		getImportModule().toString(s);
+		
+		s.append(" ");
+		getAsType().toString(s);
+		s.append(" ");
+		getAsModule().toString(s);
+		s.append(";");
+	}
+	
+	public void ModuleImportTypeNorm.toString(StringBuffer s) {
+	}
+	
+	public void ModuleImportTypeOwn.toString(StringBuffer s) {
+		s.append("own");
+	}
+	
+	public void ModuleMergeDecl.toString(StringBuffer s) {
+		s.append("merge ");
+		boolean first = true;
+		for (ModuleAccess ma : getMergeModuleList()) {
+			if (!first) {
+				s.append(", ");
+			}
+			ma.toString(s);
+			first = false;
+		}
+		s.append(" ");
+		getAsType().toString(s);
+		s.append(" ");
+		getAsModule().toString(s);
+		s.append(";");
+	}
+	public void ModuleReplaceDecl.toString(StringBuffer s) {
+		s.append("replace ");
+		boolean first = true;
+		for (ModuleAccess ma : getReplaceModuleList()) {
+			if (!first) {
+				s.append(", ");
+			}
+			ma.toString(s);
+			first = false;
+		}
+		s.append(" with ");
+		getWithExpr().toString(s);
+		s.append(";");
+	}
+	public void AsTypeOwn.toString(StringBuffer s) {
+		s.append("as");
+	}
+	public void AsTypeExport.toString(StringBuffer s) {
+		s.append("export as");
+	}
+	public void AsTypeNone.toString(StringBuffer s) {
+		s.append("as none");
+	}
+	
+	public void ModuleExportDecl.toString(StringBuffer s) {
+		s.append("export package ");
+		boolean first = true;
+		for (ModulePackageDecl modulePackageDecl : getModulePackageDeclList()) {
+			if (!first) {
+				s.append(", ");
+			}
+			modulePackageDecl.toString(s);
+			first = false;
+		}
+		s.append(";");
+	}
+	
+	public void ModuleExportAllDecl.toString(StringBuffer s) {
+		s.append("export package *;");
+	}
+	
+	public void ModulePackageDecl.toString(StringBuffer s) {
+		s.append(getID());
+	}
+	
+	public void ModuleExpr.toString(StringBuffer s) {
+		throw new Error("toString should not be called on abstract ModuleExpr");
+	}
+	
+	public void ModuleAccessExpr.toString(StringBuffer s) {
+		getModuleAccess().toString(s);
+	}
+	
+	public void ModuleSingletonAccessExpr.toString(StringBuffer s) {
+		s.append("singleton ");
+		getModuleAccess().toString(s);
+	}
+	
+	public void ModuleOwnExpr.toString(StringBuffer s) {
+		s.append("own ");
+		getModuleAccess().toString(s);
+	}
+}

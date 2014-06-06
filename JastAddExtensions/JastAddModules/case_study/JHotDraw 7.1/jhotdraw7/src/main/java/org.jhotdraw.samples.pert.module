@@ -1,0 +1,2 @@
+module org.jhotdraw.samples.pert extends org.jhotdraw.samples.defaultsample;
+export package *;

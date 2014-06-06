@@ -1,0 +1,4 @@
+Errors:
+test/Test9.java:4:
+  Semantic Error: AST child Node is multiply declared
+

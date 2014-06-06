@@ -1,0 +1,41 @@
+aspect ModuleInterface {
+	public boolean ModuleCompilationUnit.isModuleInterface() {
+		return getModuleDecl() instanceof InterfaceModuleDecl;
+	}
+	
+	public boolean ModuleCompilationUnit.isWeakModuleInterface() {
+		return getModuleDecl() instanceof WeakInterfaceModuleDecl;
+	}
+	
+	public boolean ModuleCompilationUnit.isInterfaceOf(ModuleCompilationUnit mcu) {
+		//self test
+		if (this.getBaseCU() == mcu.getBaseCU()) {
+			return true;
+		}
+		//if not an interface, return false
+		if (!(this.isModuleInterface())) {
+			return false;
+		}
+		
+		//implements test 
+		ModuleCompilationUnit currMCU = mcu.getBaseCU();
+		while (currMCU != null) {
+			for (ModuleAccess access : currMCU.getBaseCU().getModuleDecl().getImplementsList()) {
+				ModuleCompilationUnit interfaceMCU = getHostProgram().lookupModuleCUNoTransform(access); 
+				if (interfaceMCU.hasSuperModule(this.getBaseCU())) {
+					return true;
+				}
+			}
+			currMCU = currMCU.getSuperModuleCUNoTransform();
+		}
+		
+		//check the signatures for weak interfaces
+		if (isWeakModuleInterface()) {
+			if (mcu.getExportedPackages().containsAll(getBaseCU().getExportedPackages())) {
+				return true;
+			}
+		}
+		
+		return false;
+	}
+}

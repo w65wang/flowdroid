@@ -1,0 +1,39 @@
+import java.util.Stack;
+
+aspect Caching {
+  interface CacheRoot {
+    void propagate();
+    int getLastFlushed();
+    void invalidate();
+    void flushCaches();
+    boolean incremental(boolean flag);
+  }
+
+  public boolean CacheRoot.flushing = false;
+  boolean CacheRoot.incremental = true;
+
+  public CacheRoot ASTNode.getCacheRoot() {
+    ASTNode n = this;
+    while(/*n != null &&*/ !(n instanceof CacheRoot))
+      n = n.parent;
+    return (CacheRoot)n;
+  }
+
+  private Stack<Caching.CacheRoot> ASTNode$State.cachestack = new Stack<Caching.CacheRoot>();
+  private Caching.CacheRoot ASTNode$State.curroot = null;
+
+  public void ASTNode$State.pushCacheRoot(Caching.CacheRoot root) {
+    cachestack.push(curroot=root);
+  }
+
+  public void ASTNode$State.popCacheRoot() {
+    cachestack.pop();
+    curroot = cachestack.isEmpty()? null : cachestack.peek();
+  }
+
+  public Caching.CacheRoot ASTNode$State.getCurrentCacheRoot() {
+    assert(curroot != null);
+    return curroot;
+  }
+
+}

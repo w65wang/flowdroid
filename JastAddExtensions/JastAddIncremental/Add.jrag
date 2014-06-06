@@ -1,0 +1,228 @@
+aspect Add {
+
+  refine Rewrites public void ClassDecl.generateIntertypeDecls() {
+    refined();
+    if(this == listNode() || this == optNode())
+      addCreateForward(getBodyDeclList());
+  }
+  
+  refine DependencyTracking public void ASTDecl.generateIntertypeDecls() {
+    refined();
+    addCreateForward(getBodyDeclList());
+  }
+  
+  protected void ClassDecl.addCreateForward(List list) {
+    // ThisType createForward() {
+    //   forwardBackwardField = new ThisType_proxy(this);
+    //   initProxyFields(forwardBackwardField);
+    //   return forwardBackwardField;
+    // }
+
+    Expr e = new ClassInstanceExpr(proxy().createBoundAccess(), new List().add(new ThisAccess("this")), new Opt());
+    List statements = new List();
+    statements.add(AssignExpr.asStmt(new VarAccess("forwardBackwardField"), e));
+    statements.add(new ExprStmt(createInitProxyFields().createBoundAccess(new List().add(new VarAccess("forwardBackwardField")))));
+    statements.add(new ReturnStmt(new Opt(new VarAccess("forwardBackwardField"))));
+
+    MethodDecl m = new MethodDecl(
+      new Modifiers(new List().add(new Modifier("public"))),
+      //this.createBoundAccess(),
+      astNode().createQualifiedAccess(),
+      "createForward",
+      new List(),
+      new List(),
+      new Opt(new Block(statements))
+    );
+    list.add(m);
+  }
+
+  syn MethodDecl ClassDecl.superInitProxyFields() =
+    ((ClassDecl)superclass().sourceTypeDecl()).createInitProxyFields();
+
+  protected MethodDecl ClassDecl.createInitProxyFields() {
+    MethodDecl m = (MethodDecl)getAccessor(this, "init_proxy_fields");
+    if(m != null) return m;
+
+    List list = new List();
+    list.add(
+      new VariableDeclaration(createQualifiedAccess(), "n", new CastExpr(createQualifiedAccess(), new VarAccess("node")))
+    );
+
+    // TODO: remove caching fields, etc.
+    for(Iterator iter = localFieldsMap().values().iterator(); iter.hasNext(); ) {
+      FieldDeclaration f = (FieldDeclaration)iter.next();
+      if(f.isStatic() || f.isSynthetic())
+	continue;
+      if(f.name().equals("forwardBackwardField"))
+	continue;
+      list.add(
+        AssignExpr.asStmt(
+          new VarAccess("n").qualifiesAccess(new VarAccess(f.name())),
+          new ThisAccess("this").qualifiesAccess(new VarAccess(f.name()))
+        )
+      );
+    }
+    if(astNode() != this) {
+      list.add(
+        new ExprStmt(
+          new SuperAccess("super").qualifiesAccess(
+            superInitProxyFields().createBoundAccess(
+              new List().add(new VarAccess("node"))
+            )
+          )
+        )
+      );
+    }
+    else {
+      list.add(
+        new ExprStmt(
+          new MethodAccess("initProxyChildren", new List().add(new VarAccess("node")))
+        )
+      );
+    }
+
+    m = new MethodDecl(
+      new Modifiers(new List().add(new Modifier("protected"))),
+      new PrimitiveTypeAccess("void"),
+      "initProxyFields",
+      new List().add(
+	new ParameterDeclaration(astNode().createQualifiedAccess(), "node")
+      ),
+      new List(),
+      new Opt(new Block(list))
+    );
+
+    m = addMemberMethod(m);
+    addAccessor(this, "init_proxy_fields", m);
+    return m;
+  }
+
+
+  private ClassDecl ClassDecl.proxy = null;
+  protected ClassDecl ClassDecl.proxy() {
+    if(proxy != null)
+      return proxy;
+  
+    List list = new List();
+    ClassDecl d = new ClassDecl(
+      new Modifiers(new List().add(new Modifier("public")).add(new Modifier("static"))),
+      name() + "_proxy",
+      new Opt(this.createBoundAccess()),
+      new List(),
+      list
+    );
+
+    addForwardBackward(list);
+    addAttributeProxies(list);
+    addProxyConstructor(list);
+
+    proxy = addMemberClass(d);
+    return proxy;
+  }
+  private void ClassDecl.addForwardBackward(List list) {
+    // add forward method "return this"
+    list.add(
+      new MethodDecl(
+        new Modifiers(new List().add(new Modifier("protected"))),
+        this.createBoundAccess(),
+        "forward",
+        new List(),
+        new List(),
+        new Opt(
+          new Block(
+            new List().add(
+              new ReturnStmt(new Opt(new ThisAccess("this")))
+            )
+          )
+        )
+      )
+    );
+
+    // add backward method "return (Type)forwardBackwardField
+    list.add(
+      new MethodDecl(
+        new Modifiers(new List().add(new Modifier("protected"))),
+        this.createBoundAccess(),
+        "backward",
+        new List(),
+        new List(),
+        new Opt(
+          new Block(
+            new List().add(
+              new ReturnStmt(new Opt(new CastExpr(createBoundAccess(), new VarAccess("forwardBackwardField"))))
+            )
+          )
+        )
+      )
+    );
+  }
+
+  private void ClassDecl.addProxyConstructor(List list) {
+    List statements = new List();
+    statements.add(
+      AssignExpr.asStmt(
+	new VarAccess("forwardBackwardField"),
+	new VarAccess("that")
+      )
+    );
+    ConstructorDecl c = new ConstructorDecl(
+      new Modifiers(new List().add(new Modifier("public"))),
+      name() + "_proxy",
+      new List().add(
+        new ParameterDeclaration(this, "that")
+      ),
+      new List(),
+      new Opt(),
+      new Block(statements)
+    );
+    list.add(c);
+  }
+
+  private void ClassDecl.addAttributeProxies(List list) {
+    for(Iterator iter = methodsIterator(); iter.hasNext(); ) {
+      MethodDecl m = (MethodDecl)iter.next();
+      if(m instanceof AttributeDecl) {
+        // create overriding proxy method
+        // return backward().x()
+
+        List args = new List();
+        for(int i = 0; i < m.getNumParameter(); i++) {
+	  if(m.getParameter(i).type().subtype(astNode()))
+	    args.add(new CastExpr(
+	      m.getParameter(i).type().createQualifiedAccess(),
+	      new VarAccess(m.getParameter(i).name()).qualifiesAccess(
+		new MethodAccess("backward", new List()))));
+	  else
+	    args.add(new VarAccess(m.getParameter(i).name()));
+	}
+
+        Expr call = new MethodAccess("backward", new List()).qualifiesAccess(m.createBoundAccess(args));
+	if(m.type().subtype(astNode()))
+	  call = new CastExpr(m.type().createQualifiedAccess(),
+	    call.qualifiesAccess(new MethodAccess("forward", new List())));
+
+        list.add(
+          new MethodDecl(
+            new Modifiers(new List().add(new Modifier("public"))),
+            m.type().createQualifiedAccess(),
+            m.name(),
+            (List)m.getParameterList().boundCopy(),
+            new List(),
+            new Opt(
+              new Block(
+                new List().add(
+                  new ReturnStmt(
+                    new Opt(
+                      call
+                    )
+                  )
+                )
+              )
+            )
+          )
+        );
+      }
+    }
+  }
+
+}

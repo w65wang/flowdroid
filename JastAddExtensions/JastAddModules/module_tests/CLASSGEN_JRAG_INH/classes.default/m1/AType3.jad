@@ -1,0 +1,103 @@
+// Decompiled by Jad v1.5.8g. Copyright 2001 Pavel Kouznetsov.
+// Jad home page: http://www.kpdus.com/jad.html
+// Decompiler options: packimports(3) 
+// Source File Name:   A.ast
+
+package m1;
+
+import jastadd$framework.ASTNode;
+
+// Referenced classes of package m1:
+//            AType4
+
+public class AType3 extends ASTNode
+{
+
+    public AType4 getAType4()
+    {
+        return (AType4)getChild(0);
+    }
+
+    public AType4 getAType4NoTransform()
+    {
+        return (AType4)getChildNoTransform(0);
+    }
+
+    public void setAType4(AType4 node)
+    {
+        setChild(node, 0);
+    }
+
+    public AType3(AType4 p0)
+    {
+        functionA2$visited = false;
+        setChild(p0, 0);
+    }
+
+    public AType3()
+    {
+        functionA2$visited = false;
+    }
+
+    protected void init$children()
+    {
+        children = new ASTNode[1];
+    }
+
+    public String functionA2()
+    {
+        boolean flag = false;
+        if(functionA2$visited)
+            throw new RuntimeException("Circular definition of attr: functionA2() in class: m1.AType3");
+        functionA2$visited = true;
+        if(IN_CIRCLE)
+        {
+            flag = true;
+            IN_CIRCLE = false;
+            pushEvalStack();
+        }
+        ASTNode astnode = getParent();
+        Object obj = this;
+        Object obj1 = null;
+        for(; !(astnode instanceof jastadd$framework.ASTNode.Defines.functionA2); astnode = astnode.getParent())
+        {
+            obj1 = obj;
+            obj = astnode;
+        }
+
+        String s = ((jastadd$framework.ASTNode.Defines.functionA2)astnode).Defines$functionA2(((ASTNode) (obj)), ((ASTNode) (obj1)));
+        functionA2$visited = false;
+        if(flag)
+        {
+            IN_CIRCLE = true;
+            popEvalStack();
+        }
+        return s;
+    }
+
+    public ASTNode rewriteTo()
+    {
+        return super.rewriteTo();
+    }
+
+    public Object clone()
+        throws CloneNotSupportedException
+    {
+        AType3 node = (AType3)super.clone();
+        node.inCircle = false;
+        node.is$Final = false;
+        return node;
+    }
+
+    public int getNumChild()
+    {
+        return 1;
+    }
+
+    public boolean mayHaveRewrite()
+    {
+        return false;
+    }
+
+    private boolean functionA2$visited;
+}

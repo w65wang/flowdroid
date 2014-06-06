@@ -1,0 +1,3 @@
+module org.jhotdraw.samples.teddy extends org.jhotdraw.samples.defaultsample;
+
+export package *;

@@ -1,0 +1,16 @@
+aspect ScannerParserSupport {
+	refine ASTParsing public void Program.addSourceFile(String name, String contents) {
+  		if (name.endsWith("flex") || name.endsWith("parser")) {
+  			// Nothing to do here because all flex/parser files are built together
+  		} else {
+  			ASTParsing.Program.addSourceFile(name, contents);
+  		}
+  	}
+  	refine ASTGrammar public void Program.addSourceFile(String name) {
+  		if (name.endsWith("flex") || name.endsWith("parser")) {
+  			// Nothing to do here because all flex/parser files are built together
+  		} else {
+  			ASTGrammar.Program.addSourceFile(name);
+  		}
+  	}
+}

@@ -1,0 +1,3 @@
+Unrecoverable semantic error(s) found.
+m1.module:1,19:
+  Semantic Error: Module m1 involved in an extends cycle with the following modules: m1, m2

@@ -1,0 +1,3 @@
+Unrecoverable semantic error(s) found.
+m1.module:7,9:
+  Semantic Error: Incompatible modules in replace: m3, m4int

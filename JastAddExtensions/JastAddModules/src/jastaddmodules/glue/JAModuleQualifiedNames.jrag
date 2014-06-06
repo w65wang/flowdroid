@@ -1,0 +1,101 @@
+
+aspect JAModuleQualifiedNames {
+	public ModuleDot Expr.moduleQualifiesAccess(Access access) {
+		ModuleDot dot = new ModuleDot(this, access);
+		return dot;
+	}
+	
+	public ModuleDot ModuleDot.moduleQualifiesAccess(Access access) {
+	    Dot lastDot = lastDot();
+	    ModuleDot dot = new ModuleDot(lastDot.getRightNoTransform(), access);
+	    lastDot.setRight(dot);
+	    return this;
+	}
+	
+	//This was cut and paste from ResolveAmbiguousNames. Check with Torbjorn if there is a problem
+	private Access ModuleDot.qualifyTailWith(Access expr) {
+		if(getRight/*NoTransform*/() instanceof AbstractDot) {
+			AbstractDot dot = (AbstractDot)getRight/*NoTransform*/();
+			return expr.qualifiesAccess(dot.getRight/*NoTransform*/());
+		}
+		return expr;
+	}
+	
+	//Adapted from Java1.4Frontend/ResolveAmbiguousNames 
+	rewrite ModuleDot {
+		when(!duringSyntacticClassification() && leftSide().isPackageAccess() && rightSide().isPackageAccess())
+		to Access {
+			PackageAccess left = (PackageAccess)leftSide();
+			PackageAccess right = (PackageAccess)rightSide();
+			left.setPackage(left.getPackage() + Program.MODULE_SEPARATOR + right.getPackage());
+			left.setEnd(right.end());
+			return qualifyTailWith(left);
+		}
+	}
+	// change a ModuleDot("m1", "Type") into a Dot("m1::", "Type")
+	rewrite ModuleDot {
+		when(!duringSyntacticClassification() && leftSide().isPackageAccess() && !((Access)leftSide()).hasPrevExpr() && rightSide() instanceof TypeAccess)
+		to Access {
+			PackageAccess left = (PackageAccess)leftSide();
+			TypeAccess right = (TypeAccess)rightSide();
+			//change left to left::
+			left.setPackage(left.getPackage() + Program.MODULE_SEPARATOR);
+			return qualifyTailWith(left.qualifiesAccess(right));
+			}
+	}
+
+
+	//returns the mangled type names
+	syn String ImportDecl.globalTypeName() {
+		Access a = getAccess().lastAccess();
+		String name = a.isTypeAccess() ? ((TypeAccess)a).nameWithGlobalPackage() : "";
+		while(a.hasPrevExpr() && a.prevExpr() instanceof Access) {
+			Access pred = (Access)a.prevExpr();
+			if(pred.isTypeAccess()) {
+				name = ((TypeAccess)pred).nameWithGlobalPackage() + "." + name;
+			}
+			a = pred;
+		}
+		return name;
+	}
+	
+	syn String TypeDecl.globalTypeName() {
+		return typeName();
+	}
+	
+	syn String Expr.globalTypeName() = "";
+	eq AbstractDot.globalTypeName() = lastAccess().globalTypeName();
+	eq TypeAccess.globalTypeName() {
+		ModuleCompilationUnit mcu = compilationUnit().getModuleCompilationUnit();
+		if (mcu == null) {
+			return typeName();
+		}
+		if (isQualified()) {
+			return qualifier().globalTypeName() + "." + name();
+		} else {
+			return nameWithGlobalPackage();
+		}
+	}
+
+	//needed for type access
+	inh CompilationUnit TypeAccess.compilationUnit();
+	syn String TypeAccess.nameWithGlobalPackage() {
+		ModuleCompilationUnit mcu = compilationUnit().getModuleCompilationUnit();
+		if (mcu == null) {
+			return nameWithPackage();
+		}
+		if (getPackage().equals("")) {
+			return name();
+		} else {
+			String globalPackage = "";
+			Set<String> globalPackageSet = mcu.lookupPackage(getPackage(), mcu, false);
+			assert (globalPackageSet.size() <= 1) : "Ambiguous package lookups should already have been handled by an error pass"; 
+			if (globalPackageSet.isEmpty()) {
+				globalPackage = getPackage();
+			} else {
+				globalPackage = globalPackageSet.iterator().next();
+			}
+			return globalPackage + "." + name();
+		}
+	}
+}

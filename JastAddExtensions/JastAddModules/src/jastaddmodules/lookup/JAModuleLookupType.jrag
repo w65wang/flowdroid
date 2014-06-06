@@ -1,0 +1,318 @@
+//TODO: The entire type lookup with modules is a hack, using package names
+//and disambiguating them as Strings. This was partially by design (since
+//module instances are mapped to package names and keeping them as
+//package names is more consistent with the output) and partially by convenience
+//(the lookupType method parameters are (packageName, typeName)). The "right"
+//way to do it is to introduce ModuleAccesses into names and do proper disambiguation.
+import jastaddmodules.*;
+
+aspect JAModuleLookupType {
+	refine LookupType eq Program.lookupType(String packageName, String typeName) {
+		assert (isModuleProcessingComplete()) : "Program.lookupType called before module processing was complete";
+		addPrimitiveTypes();
+		String fullName = packageName.equals("") ? typeName : packageName + "." + typeName;
+		
+		//TODO: iterator may be expensive
+		
+		for (Iterator<CompilationUnit> iter = compilationUnitIterator(); iter.hasNext(); ) {
+			CompilationUnit currCU = iter.next();
+			if (currCU instanceof ModuleCompilationUnit) {
+				continue;
+			}
+			for(int i = 0; i < currCU.getNumTypeDecl(); i++) {
+				TypeDecl type = currCU.getTypeDecl(i);
+				if(type.fullName().equals(fullName)) {
+					return type;
+				}
+			}
+		}
+
+		//This gets the CUs from source files not explicitly added to the parameterlist
+		//and classes from classpath entries
+		//TODO: The !fromSource condition is too strong (if I understand correctly
+		//this also loads source files from sourcelist). Check if problems arise
+		CompilationUnit u = getCompilationUnit(fullName);
+		if(u != null && !u.fromSource()) { //TODO: if u was fromSource, it should have been found in the loops above. Find out how to remove the fullname from the set
+			addCompilationUnit(u);
+			getCompilationUnit(getNumCompilationUnit()-1);
+			for(int j = 0; j < u.getNumTypeDecl(); j++) {
+				if(u.getTypeDecl(j).name().equals(typeName)) {
+					return u.getTypeDecl(j);
+				}
+			}
+			//throw new Error("No type named " + typeName + " in file " + fullName + ", " + u.pathName() + ", " + u.relativeName());
+		}
+		return null;
+	}
+	
+	eq ModuleCompilationUnit.getChild().lookupType(String packageName, String typeName) {
+		assert (getHostProgram().isModuleProcessingComplete()) : "ModuleCompilationUnit.getChild().lookupType called before module processing was complete";
+		assert (isModuleInstantiated()) : "ModuleCompilationUnit.getChild().lookupType() is being called on an uninstantiated mdoule";
+		SimpleSet result = moduleLookupType(packageName, typeName, true);
+		if (result.size() == 0) {
+			return null;
+		} else if (result.size() == 1) {
+			return (TypeDecl)(result.iterator().next());
+		} else {
+			//would result in undeterministic type lookup, should be checked in namecheck 
+			assert (false) : "non deterministic type lookup";
+			return null;
+		}
+	}
+	
+	//TODO: Shares a lot of cut n paste code with lookupPackage. Refactor to remove common code
+	//The condition includeModuleReferencesLocalPackages is put in just because I wanted
+	//type demand imports to come before lookups to the local packages of the imported
+	//modules. This implementation is extremely suspicious, try to redesign to make it go away. 
+	syn lazy SimpleSet ModuleCompilationUnit.moduleLookupType(String packageName, String typeName, boolean includeImportedModulesLocalPackages) {
+	
+		assert (getHostProgram().isModuleProcessingComplete()) : "ModuleCompilationUnit.moduleLookupType called before module processing was complete";
+		assert (isModuleInstantiated()) : "ModuleCompilationUnit.moduleLookupType() is being called on an uninstantiated mdoule";
+		
+		SimpleSet ret = SimpleSet.emptySet;
+
+		//split into module and package name
+		String moduleName = packageName;
+		String localPackageName = null;
+		if (moduleName.lastIndexOf(Program.MODULE_SEPARATOR) != -1) {
+			localPackageName = moduleName.substring(moduleName.lastIndexOf(Program.MODULE_SEPARATOR) + 2);
+			moduleName = moduleName.substring(0, moduleName.lastIndexOf(Program.MODULE_SEPARATOR));
+		} else {
+			localPackageName = ""; //this should be properly looked up in the local package names of the module
+			moduleName = packageName;
+		}
+		//special case for supermodule lookup, must be here to come before realInstance call
+		if (moduleName.equals(Program.SUPERMODULE_KEYWORD)) {
+			ModuleCompilationUnit superInstance = this.getSuperInstance();
+			if (superInstance == null) {
+				return SimpleSet.emptySet;
+			}
+			ret = superInstance.selfThenSuperLocalModuleLookupType(localPackageName, typeName);
+			return ret;
+		}
+		
+		//if a superinstance, lookup in real instance to get overriding methods
+		if (this.isSuperInstance()) {
+			return getRealInstance().moduleLookupType(
+						packageName, 
+						typeName, 
+						includeImportedModulesLocalPackages);
+		}
+		
+		//special case for java.** packages, always look at the top level first for a match
+		if (packageName.indexOf(Program.MODULE_SEPARATOR) == -1 && packageName.startsWith("java.")) {
+			TypeDecl type = getHostProgram().lookupType(packageName, typeName);
+			if (type != null) {
+				return ret.add(type);
+			}
+		}
+		
+		//local lookup through self and supertype modules
+		if (packageName.indexOf(Program.MODULE_SEPARATOR) == -1) {
+			ret = selfThenSuperLocalModuleLookupType(packageName, typeName);
+			if (!ret.isEmpty()) {
+				return ret;
+			}
+			
+			//lookup through packages of imported types
+			if (includeImportedModulesLocalPackages) {
+				for (ModuleReference importedCU : getModuleReferenceMap().values()) {
+					SimpleSet localFromImport = 
+						importedCU.getModuleCU().selfThenSuperLocalModuleLookupType(packageName, typeName);
+					for (Iterator iter = localFromImport.iterator(); iter.hasNext(); ) {
+						ret = ret.add(iter.next());
+					}
+				}
+				if (!ret.isEmpty()) {
+					return ret;
+				}
+			}
+		}
+
+		//indirect lookup through an imported module		
+		//special case for default module lookups, e.g. ::java.lang
+		if (moduleName.equals(getHostProgram().DEFAULT_MODULE_NAME)) {
+			TypeDecl type = getHostProgram().lookupType(localPackageName, typeName);
+			if (type != null) {
+				return ret.add(getHostProgram().lookupType(localPackageName, typeName));
+			} else {
+				return SimpleSet.emptySet;
+			}
+		}
+		
+		//lookup in the module specified by the module qualifier				
+		ModuleCompilationUnit importedCU = lookupModule(this, moduleName);
+		if (importedCU != null && importedCU.isModuleInstantiated()) {
+			ret = importedCU.moduleLookupType(localPackageName, typeName, false);
+			if (!ret.isEmpty()) {
+				return ret;
+			}
+		}
+		
+		//if none found, do CompilationUnit.lookupType
+		TypeDecl lastType = super.lookupType(packageName, typeName);
+		if (lastType != null) {
+			return ret.add(lastType);
+		} else {
+			return SimpleSet.emptySet;
+		}
+	}
+	
+	syn lazy SimpleSet ModuleCompilationUnit.localModuleLookupType(
+			String packageName, 
+			String typeName) {
+		SimpleSet ret = SimpleSet.emptySet;
+		LocalModulePackage localPackage = getLocalPackage(packageName);
+		if (localPackage != null) {
+			String localPackageName = makeGlobalPackageName(packageName, localPackage);
+			TypeDecl type = getHostProgram().lookupType(localPackageName, typeName);
+			if (type != null) {
+				return ret.add(type);
+			}
+		}
+		return ret;
+	}
+	
+	syn lazy SimpleSet ModuleCompilationUnit.superLocalModuleLookupType(
+			String packageName,
+			String typeName) {
+		SimpleSet ret = SimpleSet.emptySet; 
+		ModuleCompilationUnit superInstance = getSuperInstance();
+		while (superInstance != null) {
+			ret = superInstance.localModuleLookupType(packageName, typeName);
+			if (!ret.isEmpty()) {
+				return ret;
+			}
+			superInstance = superInstance.getSuperInstance();
+		}
+		return ret;
+	}
+	
+	syn lazy SimpleSet ModuleCompilationUnit.selfThenSuperLocalModuleLookupType(
+			String packageName,
+			String typeName) {
+		SimpleSet ret = SimpleSet.emptySet;
+		//local package lookup
+		ret = localModuleLookupType(packageName, typeName);
+		if (!ret.isEmpty()) {
+			return ret;
+		}
+		//local lookup through the superInstances
+		ret = superLocalModuleLookupType(packageName, typeName);
+		if (!ret.isEmpty()) {
+			return ret;
+		}
+		return ret;
+	}
+	
+	//TODO: see how these can be turned to lazy
+	public SimpleSet CompilationUnit.moduleMemberTypes(SimpleSet set) {
+		for(int i = 0; i < getNumTypeDecl(); i++) {
+			TypeDecl typeDecl = getTypeDecl(i);
+			set = typeDecl.moduleMemberTypes(set);
+		}
+		return set;
+	}
+	public SimpleSet TypeDecl.moduleMemberTypes(SimpleSet set) {
+		set = set.add(this);
+		return set;
+	}
+	
+	SimpleSet CompilationUnit.moduleMemberTypes() {
+		return moduleMemberTypes(SimpleSet.emptySet);
+	}
+	syn lazy SimpleSet ModuleCompilationUnit.moduleMemberTypes() {
+		SimpleSet ret = SimpleSet.emptySet;
+		for (CompilationUnit cu : getCompilationUnitList()) {
+			ret = cu.moduleMemberTypes(ret);
+		}
+		return ret;
+	}
+	
+	//Reimplemented LookupType and Generics since I had to insert the module
+	//imports right above LookupType
+	refine Generics eq CompilationUnit.getChild().lookupType(String name) {
+		assert (getHostProgram().isModuleProcessingComplete()) : "Program.lookupType called before module processing was complete";
+		if (isInJAModule()) {
+			//Reimplement Java1.4Frontend/LookupType...lookupType() + Generics
+		    // locally declared types in compilation unit
+			SimpleSet set = localLookupType(name);
+			if(!set.isEmpty()) return addGenericTypes(set);
+			
+			// imported types
+			set = importedTypes(name);
+			if(!set.isEmpty()) return addGenericTypes(set);
+			
+			// if in a module, lookup the types in the same local module package, 
+			// but not including the local packages of imported modules
+			ModuleCompilationUnit mcu = getModuleCompilationUnit();
+			assert (mcu != null) : "Should be a member of a ModuleCompilationUnit";
+			if (mcu.isSuperInstance()) {
+				mcu = mcu.getRealInstance();
+			}
+			
+			set = mcu.moduleLookupType(moduleLocalPackageName(), name, false);
+			if (!set.isEmpty()) {
+				return addGenericTypes(set);
+			} 
+			
+			
+			// types imported on demand
+			set = importedTypesOnDemand(name);
+			if(!set.isEmpty()) return addGenericTypes(set);
+			
+			//Lookup types with the same local module package, but this time
+			//including the imported modules.
+			set = mcu.moduleLookupType(moduleLocalPackageName(), name, true);
+			if (!set.isEmpty()) {
+				return addGenericTypes(set);
+			} 
+
+			// include primitive types
+			TypeDecl result = lookupType(PRIMITIVE_PACKAGE_NAME, name);
+			if(result != null) return addGenericTypes(SimpleSet.emptySet.add(result));
+			
+			// 7.5.5 Automatic Imports
+			result = lookupType("java.lang", name);
+			if(result != null && result.accessibleFromPackage(packageName()))
+			  return addGenericTypes(SimpleSet.emptySet.add(result));
+			return addGenericTypes(lookupType(name));
+		} else {
+			return Generics.CompilationUnit.getChild().lookupType(name);
+		}
+	}
+	
+	//Adapted from generics
+	public SimpleSet CompilationUnit.addGenericTypes(SimpleSet set) {
+    	SimpleSet result = SimpleSet.emptySet;
+		for(Iterator iter = set.iterator(); iter.hasNext(); ) {
+			TypeDecl typeDecl = (TypeDecl)iter.next();
+			if(typeDecl instanceof ParTypeDecl)
+				result = result.add(((ParTypeDecl)typeDecl).genericDecl());
+			else
+				result = result.add(typeDecl);
+		}
+		return result;
+	}
+	
+	//add module lookup type for package qualified typeaccesses
+	refine LookupType eq TypeAccess.decls() {
+		ModuleCompilationUnit mcu = compilationUnit().getModuleCompilationUnit();
+		if(packageName().equals("")) {
+			return lookupType(name());
+		}
+		else {
+			if (mcu != null) {
+				SimpleSet typeDecls = mcu.moduleLookupType(packageName(), name(), true);
+				if (typeDecls.size() > 0) {
+					return typeDecls;
+				}
+			}
+			TypeDecl typeDecl = lookupType(packageName(), name());
+			if(typeDecl != null) {
+				return SimpleSet.emptySet.add(typeDecl);
+			}
+			return SimpleSet.emptySet;
+		}
+	}
+}

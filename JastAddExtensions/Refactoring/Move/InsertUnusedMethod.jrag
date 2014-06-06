@@ -1,0 +1,46 @@
+aspect InsertUnusedMethod {
+	// insert an unused method into a given type
+	public void TypeDecl.insertUnusedMethod(MethodDecl m) {
+		insertUnusedMethod(m, getNumBodyDecl());
+	}
+	public void TypeDecl.insertUnusedMethod(MethodDecl m, int idx) {
+		throw new RefactoringException("cannot insert method into this kind of type declaration");
+	}
+	
+	public void ClassDecl.insertUnusedMethod(MethodDecl m, int idx) {
+		programRoot().lockMethodNames(m.name());
+		getBodyDeclList().insertChild(m, idx);
+//		programRoot().flushCaches();
+		// we flush only these because we don't want to flush all decl-s,
+		// as uses() heavily depends on them.
+		// I think this should be enough, provided the values in caches
+		// were current before call to this method and
+		// (probably) uses is the only thing that we care about that can change.
+		// helped 10s (27s to 18s on one ExtractClass)
+		
+		// FIXME: pint for the person who finds a proper fix (Tomas)
+		try { this.toString(); } catch (Exception e) { }
+		
+		for(MethodDecl mm : m.relatives())
+			for(MethodAccess ma : mm.uses())
+				ma.flushCaches();
+		m.flushCaches();
+		if(!canIntroduceMethod(m))
+			throw new RefactoringException("cannot insert method here");
+		if(m.isDynamicallyCallable())
+			throw new RefactoringException("method is used");
+		m.checkEnclosingTypeNames(this);
+		if(m.isAbstract())
+			for(TypeDecl td : m.inheritingTypes())
+				td.makeAbstract();
+	}
+	
+	public void ParTypeDecl.insertUnusedMethod(MethodDecl m, int idx) {
+		genericDecl().insertUnusedMethod(m);
+	}
+	
+	public void ClassDeclSubstituted.insertUnusedMethod(MethodDecl m, int idx) {
+		original().insertUnusedMethod(m);
+	}
+	
+}

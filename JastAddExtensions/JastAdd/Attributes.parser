@@ -1,0 +1,52 @@
+BodyDecl intertype_member_declaration =
+  syn_decl
+  | inh_decl
+  | syn_eq
+  | inh_eq
+  ;
+
+BodyDecl syn_decl =
+    modifiers.mod? SYN type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN method_body.b 
+    {: return new SynDecl(new Modifiers(mod), false, type, hostType, IDENTIFIER, p, b); :}
+  | modifiers.mod? SYN LAZY type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN method_body.b 
+    {: return new SynDecl(new Modifiers(mod), true, type, hostType, IDENTIFIER, p, b); :}
+  | modifiers.mod? SYN type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN EQ expression SEMICOLON
+    {: return new SynDecl(new Modifiers(mod), false, type, hostType, IDENTIFIER, p, new Opt(new Block(new List().add(new ReturnStmt(new Opt(expression)))))); :}
+  | modifiers.mod? SYN LAZY type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN EQ expression SEMICOLON
+    {: return new SynDecl(new Modifiers(mod), true, type, hostType, IDENTIFIER, p, new Opt(new Block(new List().add(new ReturnStmt(new Opt(expression)))))); :}
+
+  | modifiers.mod? SYN NTA type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN method_body.b 
+    {: return new SynDecl(new Modifiers(mod), false, type, hostType, IDENTIFIER, p, b).declareNTA(); :}
+  | modifiers.mod? SYN LAZY FINAL type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN method_body.b 
+    {: return new SynDecl(new Modifiers(mod), true, type, hostType, IDENTIFIER, p, b).declareFinal(); :}
+  | modifiers.mod? SYN NTA type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN EQ expression SEMICOLON
+    {: return new SynDecl(new Modifiers(mod), false, type, hostType, IDENTIFIER, p, new Opt(new Block(new List().add(new ReturnStmt(new Opt(expression)))))).declareNTA(); :}
+  | modifiers.mod? SYN LAZY FINAL type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN EQ expression SEMICOLON
+    {: return new SynDecl(new Modifiers(mod), true, type, hostType, IDENTIFIER, p, new Opt(new Block(new List().add(new ReturnStmt(new Opt(expression)))))).declareFinal(); :}
+
+  ;
+
+BodyDecl inh_decl =
+    modifiers.mod? INH type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN SEMICOLON 
+                                                         {: return new InhDecl(new Modifiers(mod), false, type, hostType, IDENTIFIER, p); :}
+  | modifiers.mod? INH LAZY type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN SEMICOLON 
+                                                         {: return new InhDecl(new Modifiers(mod), true, type, hostType, IDENTIFIER, p); :}
+  | modifiers.mod? INH LAZY FINAL type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN SEMICOLON 
+                                                         {: return new InhDecl(new Modifiers(mod), true, type, hostType, IDENTIFIER, p).declareFinal(); :}
+  | modifiers.mod? INH NTA type name.hostType DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN SEMICOLON 
+                                                         {: return new InhDecl(new Modifiers(mod), true, type, hostType, IDENTIFIER, p).declareNTA(); :}
+  ;
+
+BodyDecl syn_eq =
+    EQUATION name DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN EQ expression SEMICOLON
+    {: return new SynEq(name, IDENTIFIER, p, new Opt(new Block(new List().add(new ReturnStmt(new Opt(expression)))))); :}
+  | EQUATION name DOT IDENTIFIER LPAREN formal_parameter_list.p? RPAREN block
+    {: return new SynEq(name, IDENTIFIER, p, new Opt(block)); :}
+  ;
+  
+BodyDecl inh_eq =
+    EQUATION name.type DOT IDENTIFIER.CHILD LPAREN formal_parameter_list.p1? RPAREN DOT IDENTIFIER.ATTRIBUTE LPAREN formal_parameter_list.p? RPAREN EQ expression SEMICOLON
+    {: return new InhEq(type, CHILD, p1, ATTRIBUTE, p, new Block(new List().add(new ReturnStmt(new Opt(expression))))); :}
+  | EQUATION name.type DOT IDENTIFIER.CHILD LPAREN formal_parameter_list.p1? RPAREN DOT IDENTIFIER.ATTRIBUTE LPAREN formal_parameter_list.p? RPAREN block
+    {: return new InhEq(type, CHILD, p1, ATTRIBUTE, p, block); :}
+  ;

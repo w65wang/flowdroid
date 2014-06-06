@@ -1,0 +1,9 @@
+- NTAs: if we try to evaluate an attribute on a stale copy of an NTA, 
+  strange things will happen
+- TODO:
+  * in fullCopy, use the non-invalidating setParent (same for clone, copy?)
+    reset time stamps
+  * there's no need to flush caches when adding primitive types
+  * in setChild, insert Child, removeChild: flush caches of affected
+    subtrees
+

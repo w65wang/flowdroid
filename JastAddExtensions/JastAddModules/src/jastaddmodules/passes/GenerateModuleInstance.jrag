@@ -1,0 +1,667 @@
+//STANDING NOTE: Make VERY sure that all JAModule passes before the java 
+//errorcheck DO NOT TOUCH any AST nodes below CompilationUnit to avoid 
+//the REWRITES
+
+//This code generates the module instances defined by the import, merge and
+//replace statements in the module files. The merge/replace code here is
+//the most crucial part of the entire system. Be careful when modifying it.
+
+//TODO: Try to refactor this to separate out the handling for merges and replaces
+
+
+import java.util.*;
+import jastadd.*;
+import jastaddmodules.*;
+
+//generates module CUs and clones subtrees as necessary
+//for import owns. Is done after InsertModuleCUs
+aspect GenerateModuleInstance {
+
+	ModuleCompilationUnit Program.instanceModule = null;
+	
+	public ModuleCompilationUnit Program.getInstanceModuleCU() {
+		return this.instanceModule;
+	}
+	public void Program.setInstanceModuleCU(ModuleCompilationUnit instanceModule) {
+		this.instanceModule = instanceModule;
+	}
+
+	public boolean Program.generateModuleInstances() {
+		if (!hasJAModules()) {
+			return true;
+		}
+		if (!options().hasOption(jastadd.JastAddModules.INSTANCE_MODULES_OPTION) || 
+			!options().hasValueForOption(jastadd.JastAddModules.INSTANCE_MODULES_OPTION)) {
+			System.out.println(jastadd.JastAddModules.INSTANCE_MODULES_OPTION + 
+				" option is required when there are JA modules in the set of compilation units");
+			return false; 
+		}
+		
+		String instanceModuleName = options().getValueForOption(jastadd.JastAddModules.INSTANCE_MODULES_OPTION);
+		this.setInstanceModuleCU(lookupModuleCUNoTransform(instanceModuleName));
+		if (this.instanceModule == null) {
+			System.out.println("Instance module " + instanceModuleName + " not found.");
+			return false;
+		}
+		
+		//generate import owns starting from the instance module
+		getInstanceModuleCU().generateModuleInstance(null);
+		getInstanceModuleCU().setSourceStatement(null); //debug
+		
+		return true;
+	}
+
+	//context is non-null if the import is an own. If non-null, it creates a new module cu
+	//if context is null, it is implicitly exported (i.e. it is one of the base modules
+	//and is visible). If not, then it is not exported (i.e. it was generated from an import own
+	//statement with no export)	
+	//NOTE: Keep these non-lazy, the node removal code in merge depends on separate instances of the modules being removed
+	syn ModuleCompilationUnit ModuleCompilationUnit.generateModuleInstance(ModuleCompilationUnit context) {
+		if (context == null) {
+			return generateModuleInstance(context, "");
+		} else {
+			return generateModuleInstance(context, createOwnName(context, this.getModuleName()));
+		}
+	}
+	syn ModuleCompilationUnit ModuleCompilationUnit.generateModuleInstance(ModuleCompilationUnit context, String alias) {
+		ModuleCompilationUnit ret = null;
+		//if instance module, don't reinstantiate
+		if (context == null) {
+			ret = this;
+		} else {
+			ret = instantiateModuleAs(context, alias); 
+			ret.addInstanceContext(context);
+		}
+		if (ret.isModuleInstantiated()) { //can't rely on laziness, as the cache only adds an entry after generateImportOwn returns
+			return ret;
+		}
+		ret.setModuleInstantiated(true);
+		ret.setRealInstance(ret);
+		
+		//create super instances
+		ret.instantiateSuperModules();
+		
+		//process imports
+		ret = generateImportCUs(ret);
+		
+		//process merges
+		ret = generateMergeReplaceCUs(ret);
+		
+		return ret;
+	}
+	
+	//TODO: Should really be static, except for the call to getHostProgram(). See if refactoring
+	//is worth it 
+	protected ModuleCompilationUnit ModuleCompilationUnit.generateImportCUs(ModuleCompilationUnit ret) {
+		assert (ret != null) : "ModuleCompilationUnit parameter should not be null";
+		
+		LinkedList<ModuleMemberDecl> memberList = ret.getSelfAndSuperMemberList();
+		for (ModuleMemberDecl member : memberList) {
+			if (!(member instanceof ModuleImportDecl)) {
+				continue;
+			}
+			ModuleImportDecl importDecl = (ModuleImportDecl) member;
+			
+			ModuleCompilationUnit currImport = null; 
+			currImport = getHostProgram().lookupModuleCUNoTransform(importDecl.getImportModule());
+			if (currImport == null) {
+				String msg = "Unable to find module: " + importDecl.getImportModule().getID();
+				importDecl.getImportModule().error(msg);
+				throw new jastadd.UnrecoverableSemanticError(msg);
+			}
+			
+			boolean instantiated = false;
+			String localAccessName = currImport.getModuleName();
+			if (importDecl.isOwnImport()) {
+				ModuleCompilationUnit instanceCU = null;
+				instantiated = true;
+				//if no export name, generate M$M' name
+				if (importDecl.getAsType() instanceof AsTypeNone) {
+					instanceCU = currImport.generateModuleInstance(ret);
+					instanceCU.setSourceStatement(importDecl);
+				} else {
+					localAccessName = importDecl.getAsModule().getID();
+					if (importDecl.getAsType() instanceof AsTypeOwn) {
+						instanceCU = currImport.generateModuleInstance(ret, createOwnName(ret, importDecl.getAsModule().getID()));
+						instanceCU.setSourceStatement(importDecl); 
+					} else if (importDecl.getAsType() instanceof AsTypeExport) {
+						instanceCU = currImport.generateModuleInstance(ret, createExportName(ret, importDecl.getAsModule().getID()));
+						instanceCU.setSourceStatement(importDecl); 
+					}
+				}
+				instanceCU.setBaseCU(currImport.getBaseCU());
+				currImport = instanceCU;
+			} else {//not an own import
+				//check if a synthetic static instance
+				if (currImport.isSynthetic()) {
+					String msg = "Unable to find module: " + importDecl.getImportModule().getID();
+					importDecl.getImportModule().error(msg);
+					throw new jastadd.UnrecoverableSemanticError(msg);
+				}
+				//generate from a null context
+				currImport = currImport.generateModuleInstance(null);
+				currImport.setSourceStatement(importDecl); 
+			}
+			assert (currImport != null) : "Imported module not instantiated";
+			
+			ret.checkedAddModuleReference(localAccessName, currImport, currImport.getBaseCU(), importDecl.getAsType(), importDecl.getModuleImportType());
+			
+			if (instantiated) {
+				getHostProgram().getCompilationUnitList().addChild(currImport);			
+			}
+		}
+		return ret;
+	}
+	
+	//This should only be called _after_ the import CUs have been generated.
+	//TODO: Should really be static, except for the call to getHostProgram(). See if refactoring
+	//is worth it 
+	protected ModuleCompilationUnit ModuleCompilationUnit.generateMergeReplaceCUs(ModuleCompilationUnit ret) {
+		LinkedList<ModuleMemberDecl> memberList = ret.getSelfAndSuperMemberList();
+		for (ModuleMemberDecl member : memberList) {
+			//TODO: Move process methods to mergemember/replacemember to remove instanceof test
+			if (member instanceof ModuleMergeDecl) {
+				ModuleMergeDecl mergeMember = (ModuleMergeDecl)member;
+				ret = processMergeMember(mergeMember, ret);
+			}
+			else if (member instanceof ModuleReplaceDecl) {
+				ModuleReplaceDecl replaceMember = (ModuleReplaceDecl)member;
+				ret = processReplaceMember(replaceMember, ret);
+			}
+			//else do nothing
+		}
+		return ret;
+	}
+	
+	//TODO: Refactor, move to ModuleMergeDecl and remove MCU parameter
+	protected ModuleCompilationUnit ModuleCompilationUnit.processMergeMember(ModuleMergeDecl mergeMember, ModuleCompilationUnit ret) {
+		//lookup merge targets from ret
+		if (mergeMember.getMergeModuleList().getNumChild() < 2) {
+			mergeMember.warning("There are less than two modules to merge. This may be an error.");
+		}
+		
+		//check static type
+		ModuleCompilationUnit mergeStaticType = 
+			getHostProgram()
+				.lookupModuleCUNoTransform(mergeMember.getAsModuleStaticType());
+		if (mergeStaticType == null) {
+			String msg = "Unable to find module: " + mergeMember.getAsModuleStaticType().getID();
+			mergeMember.getAsModuleStaticType().error(msg);
+			throw new UnrecoverableSemanticError(msg);
+		}
+		
+		Collection<ModuleCompilationUnit> mergeTargets = new HashSet<ModuleCompilationUnit>();
+		Collection<ModuleReference> mergeTargetReferences = new HashSet<ModuleReference>();
+		//stores the accesses for the merge cascades. Need to keep the access instead of
+		//the module reference since the references are detached when merges/replaces
+		//occur
+		Set<ModuleAccess> mergeAccesses = new HashSet<ModuleAccess>();
+		for (ModuleAccess access : mergeMember.getMergeModuleList()) {
+			ModuleCompilationUnit cu = access.lookupModule(); 
+			ModuleReference cuReference = access.lookupModuleReference();
+			
+			if (cu == null) {
+				String msg = "Unable to find module: " + access.getID();
+				access.error(msg); 
+				throw new jastadd.UnrecoverableSemanticError(msg);
+			}
+			
+			//check if already merged
+			if (cuReference.isMerged()) {
+				String msg = "Reference " + access.getID() + " already merged.";
+				access.error(msg);
+				throw new UnrecoverableSemanticError(msg);
+			}
+			
+			//self replace error
+			if (access.getID().equals(ret.getBaseCU().getModuleName())) {
+				String msg = "Cannot merge reference to self"; 
+				access.error(msg);
+				throw new jastadd.UnrecoverableSemanticError(msg);
+			}
+			
+			//check against merge static type
+			if (!isReplaceCompatible(cuReference.getStaticModuleType(), mergeStaticType)) {
+				String msg = "Incompatible modules in merge: " + 
+					cuReference.getStaticModuleType().getModuleName() + 
+					", " + 
+					mergeStaticType.getModuleName(); 
+				access.error(msg);
+				throw new jastadd.UnrecoverableSemanticError(msg);
+			} 
+			
+			if (mergeTargets.contains(cu)) {
+				access.warning("Module " + cu.getModuleName() + " is being merged with itself. This may be a sign of a wrong merge");
+			}
+			
+			if (isAccessedThroughBaseModule(access)) {
+				String msg = "Module being merged is a base module or is accessed through a base module. Merging is only allowed for import own modules."; 
+				access.error(msg);
+				throw new jastadd.UnrecoverableSemanticError(msg);
+			}
+			
+			mergeTargets.add(cu);
+			mergeTargetReferences.add(cuReference);
+			mergeAccesses.add(access);
+		}
+		//create result copy (instantiate from the base types of the merge targets with ret as a context)
+		ModuleCompilationUnit mergedCU = null;
+		String mergeAlias = mergeMember.getAsModule().getID();
+		if (mergeMember.getAsType() instanceof AsTypeOwn) {
+			mergedCU = mergeStaticType.generateModuleInstance(ret, createOwnName(ret, mergeAlias));
+		} else if (mergeMember.getAsType() instanceof AsTypeExport) {
+			mergedCU = mergeStaticType.generateModuleInstance(ret, createExportName(ret, mergeAlias));
+		}
+		mergedCU.setSourceStatement(mergeMember); //debug
+		getHostProgram().getCompilationUnitList().addChild(mergedCU);
+		
+		//find cascaded merges
+		mergeTargetReferences.addAll(
+			getAccessReferences(
+				getCascadedMergedAccesses(mergeAccesses, new HashSet<ModuleAccess>())
+			)
+		);
+
+		ModuleReference mergedModuleRef = 
+			new ModuleReference(mergeAlias, 
+					mergedCU, 
+					mergeStaticType, 
+					mergeMember.getAsType(), 
+					new ModuleImportTypeOwn(), 
+					ret);
+		mergedModuleRef.addMergedAccesses(mergeAccesses);
+		
+		//replace the targets in the tree
+		ret = ret.mergeTargets(mergeMember, mergeTargetReferences, mergedModuleRef);
+		
+		//set the merge decl
+		for (ModuleReference mref : mergeTargetReferences) {
+			mref.setCascadedMergeDecl(mergeMember);
+		}
+		
+		return ret;
+	}
+	
+	//TODO: Refactor, move to ModuleReplaceDecl and remove MCU parameter
+	protected ModuleCompilationUnit ModuleCompilationUnit.processReplaceMember(ModuleReplaceDecl replaceMember, ModuleCompilationUnit ret) {
+		
+		ModuleCompilationUnit replaceCU = replaceMember.getWithExpr().getModuleInstance(ret);
+		if (replaceCU == null) {
+			String msg = "Unable to get module instance: " + replaceMember.getWithExpr().toString();
+			replaceMember.getWithExpr().error(msg);
+			throw new jastadd.UnrecoverableSemanticError(msg);
+		} 
+		
+		//TODO: See if replaceTargets can be completely removed
+		Collection<ModuleCompilationUnit> replaceTargets = new HashSet<ModuleCompilationUnit>();
+		Set<ModuleAccess> replaceAccesses = new HashSet<ModuleAccess>();
+		Set<ModuleReference> replaceTargetReferences = new HashSet<ModuleReference>();
+		for (ModuleAccess access : replaceMember.getReplaceModuleList()) {
+			ModuleCompilationUnit cu = access.lookupModule(); 
+			ModuleReference cuReference = access.lookupModuleReference();
+			
+			if (cu == null) {
+				String msg = "Unable to find module: " + access.getID();
+				access.error(msg); 
+				throw new jastadd.UnrecoverableSemanticError(msg);
+			}
+			
+			//self replace error
+			if (access.getID().equals(ret.getBaseCU().getModuleName())) {
+				String msg = "Cannot replace reference to self"; 
+				access.error(msg);
+				throw new jastadd.UnrecoverableSemanticError(msg);
+			}
+			
+			//if not type compatible
+			if (!isReplaceCompatible(cuReference.getStaticModuleType(),replaceCU)) {
+				String msg = "Incompatible modules in replace: " + replaceCU.getBaseCU().getModuleName() + ", " + cu.getBaseCU().getModuleName(); 
+				access.error(msg);
+				throw new jastadd.UnrecoverableSemanticError(msg);
+			}
+			
+			if (replaceTargets.contains(cu)) {
+				access.warning("Module " + cu.getModuleName() + " is being replaced with itself. This may be a sign of a wrong replace");
+			}
+			
+			//check if part of a merge
+			if (cuReference.isMerged()) {
+				access.warning("The module reference " + access.getID() + 
+					" is already merged. It is advisable to use the merged reference instead: \n" +
+					"\t" + cuReference.getCascadedMergeDecl().toString() +
+					"\nwhich is declared in module " + 
+					cuReference.getCascadedMergeDecl().getModuleCompilationUnit().getBaseCU().getModuleName());
+			}
+			
+			if (isAccessedThroughBaseModule(access)) {
+				String msg = "Module being replaced is a base module or is accessed through a base module. Replacement is only allowed for import own modules."; 
+				access.error(msg);
+				throw new jastadd.UnrecoverableSemanticError(msg);
+			}
+			
+			replaceTargets.add(cu);
+			replaceTargetReferences.add(cuReference);
+			replaceAccesses.add(access);
+			
+		}
+		
+		//find cascaded merges
+		replaceTargetReferences.addAll(
+			getAccessReferences(
+				getCascadedMergedAccesses(replaceAccesses, new HashSet<ModuleAccess>())
+			)
+		);
+		
+		ret = ret.replaceTargets(replaceMember, replaceTargetReferences, replaceCU);
+		return ret;
+	}
+	
+	//Changes the module references targeted by merge. Detaches
+	//the old instances from the tree if no pointers to them exist
+	protected ModuleCompilationUnit 
+		ModuleCompilationUnit.mergeTargets(ModuleMergeDecl mergeDecl,
+			Collection<ModuleReference> mergeTargets,
+			ModuleReference mergedModuleRef) {
+		ModuleCompilationUnit mergedStaticType = mergedModuleRef.getStaticModuleType();
+		ModuleCompilationUnit mergedCU = mergedModuleRef.getModuleCU();
+		String mergeAlias = mergedModuleRef.getAlias();
+					
+		for (ModuleReference mref : mergeTargets) {
+			ModuleCompilationUnit oldCU =  mref.getModuleCU();
+
+			//if not in the the same module
+			if (mref.getContext() != this) {
+				//point to the new merged CU			
+				mref.setModuleCU(mergedCU);
+				
+				//add to instance context
+				mergedCU.addInstanceContext(mref.getContext());
+			}
+			// if in the same module 
+			else {
+				//if overrides an existing merge or import
+				ModuleReference overridenMRef = this.getModuleReference(mergeAlias);
+				if (overridenMRef != null && mref.getAlias().equals(mergeAlias)) {
+					if (overridenMRef.getStaticModuleType() != mergedStaticType) {
+						String msg = 
+							"Merge changes the type of an existing module reference " + 
+							overridenMRef.getAlias() +
+							" from " +
+							overridenMRef.getStaticModuleType().getModuleName() +
+							" to " +
+							mergedStaticType.getModuleName();
+						mergeDecl.error(msg);
+						throw new UnrecoverableSemanticError(msg);
+					} 
+					if (overridenMRef.getAsType().isExported() != mergeDecl.getAsType().isExported()) {
+						String msg = "Merge changes the export signature of an existing module reference " + overridenMRef.getAlias();
+						mergeDecl.error(msg);
+						throw new UnrecoverableSemanticError(msg);
+					}
+					//add the old reference's cascaded merges to the mergedModuleRef
+					mergedModuleRef.addMergedAccesses(overridenMRef.getMergedAccesses());
+					//remove the old instance, it will be added in the checked add below
+					this.removeModuleReference(mergeAlias);
+				}
+				//else does not override an import 
+				else {
+					mref.setModuleCU(mergedCU);
+				}
+				mergedCU.addInstanceContext(mref.getContext());
+			}
+			
+			//detach from program list if no more references to it exist
+			if (mref.getContext().getModuleReferenceAliases(oldCU).size() == 0) {
+				oldCU.detachFromProgramList(mref.getContext());
+			}
+		}
+		//attach the result copy to ret's import list
+		this.checkedAddModuleReference(mergedModuleRef);
+				
+		return this;
+	}
+	
+	
+	//change the imported CU of the reference
+	protected ModuleCompilationUnit 
+		ModuleCompilationUnit.replaceTargets(ModuleMemberDecl moduleMember,
+			Collection<ModuleReference> replaceTargets,
+			ModuleCompilationUnit replaceCU) {
+		for (ModuleReference mref : replaceTargets) {
+			//get the old CU
+			ModuleCompilationUnit replaceTargetCU = mref.getModuleCU();
+			
+			//point the reference to the replace CU
+			mref.setModuleCU(replaceCU);
+			
+			//add to instance context
+			replaceCU.addInstanceContext(mref.getContext());
+			
+			//check if there are any references left to the replaced CU in the 
+			//reference's context, detach from Program if none
+			if (mref.getContext().getModuleReferenceAliases(replaceTargetCU).size() == 0) {
+				replaceTargetCU.detachFromProgramList(mref.getContext());
+			}
+		}
+		return this; 
+	}
+	
+	//create a new ModuleCompilationUnit from the current one, using the given alias.
+	//Context will be for generating links in the accessibility graph
+	//NOTE: Keep this non-lazy, the node removal code in merge depends on separate instances of the modules being removed
+	syn ModuleCompilationUnit ModuleCompilationUnit.instantiateModuleAs(ModuleCompilationUnit context, String alias) {
+		ModuleCompilationUnit ret = null;
+		
+		ret = this.fullCopy();
+		
+		//clear instace related ITDs
+		ret.setModuleInstantiated(false);
+		ret.setModuleReferences(new HashMap<String, jastaddmodules.ModuleReference>());
+		ret.setInstanceContext(new HashSet<ModuleCompilationUnit>());
+		ret.lastAnon = 0;
+		ret.packagesCollected = false;
+		
+		ret.setModuleName(alias);
+		
+		return ret;
+	}
+	
+	public String ModuleCompilationUnit.createExportName(ModuleCompilationUnit context, String alias) {
+		return context.getModuleName() + "." + alias;
+	}
+	public String ModuleCompilationUnit.createOwnName(ModuleCompilationUnit context, String alias) {
+		return context.getModuleName() + "$" + alias;
+	}
+	protected int ModuleCompilationUnit.lastAnon = 0;
+	public String ModuleCompilationUnit.createAnonName(ModuleCompilationUnit context) {
+		lastAnon++;
+		return context.getModuleName() + "$" + Integer.toString(lastAnon);
+	}
+	
+	public void ModuleCompilationUnit.checkedAddModuleReference(String alias, ModuleCompilationUnit cu, ModuleCompilationUnit staticType, AsType asType, ModuleImportType importType) {
+		if (getModuleReference(alias) != null || alias.equals(getBaseCU().getModuleName())) {
+			getModuleDecl().error("Ambiguous module name " + alias + " in module " + this.getModuleName());
+			//throw new jastadd.UnrecoverableSemanticError("Ambiguous alias " + alias + " in module " + this.getModuleName());
+		}
+		addModuleReference(alias, cu, staticType, asType, importType);
+	}
+	
+	public void ModuleCompilationUnit.checkedAddModuleReference(ModuleReference mref) {
+		if (getModuleReference(mref.getAlias()) != null || mref.getAlias().equals(getBaseCU().getModuleName())) {
+			getModuleDecl().error("Ambiguous module name " + mref.getAlias() + " in module " + this.getModuleName());
+		}
+		importedModules.put(mref.getAlias(), mref);
+	}
+	
+	//Is true if the module was used as an instance in the ModuleCompilationUnit
+	//If the module wasn't instantiated, it won't be returned by the compilationUnitIterator()
+	protected boolean ModuleCompilationUnit.moduleInstantiated = false;
+	public void ModuleCompilationUnit.setModuleInstantiated(boolean b) {
+		moduleInstantiated = b;
+	}
+	public boolean ModuleCompilationUnit.isModuleInstantiated() {
+		return moduleInstantiated;
+	}
+	
+	public ModuleMemberDecl ModuleCompilationUnit.sourceStatement = null;
+	public void ModuleCompilationUnit.setSourceStatement(ModuleMemberDecl decl) {
+		this.sourceStatement = decl;
+	}
+	public ModuleMemberDecl ModuleCompilationUnit.getSourceStatement() {
+		return this.sourceStatement;
+	}
+	
+	public ModuleCompilationUnit ModuleCompilationUnit.mostSpecificModule(
+			ModuleCompilationUnit cu1,
+			ModuleCompilationUnit cu2) {
+		assert (cu1 != null && cu2 != null) : "null parameter passed to mostSpecificModule";
+		ModuleCompilationUnit base1 = cu1.getBaseCU();
+		ModuleCompilationUnit base2 = cu2.getBaseCU();
+		
+		//equal types
+		if (base1 == base2) {
+			return base1;
+		}
+		//supertypes
+		if (base1.hasSuperModule(base2)) {
+			return base1;
+		}
+		if (base2.hasSuperModule(base1)) {
+			return base2;
+		}
+		//interfaces
+		if (base1.isInterfaceOf(base2)) {
+			return base2;
+		}
+		if (base2.isInterfaceOf(base1)) {
+			return base1;
+		}
+		//synthetics
+		if (base1.isSynthetic() && !base2.isSynthetic()) {
+			return base2;
+		}
+		if (!base1.isSynthetic() && base2.isSynthetic()) {
+			return base1;
+		}
+		if (base1.isSynthetic() && base2.isSynthetic()) {
+			return null;
+		}
+		return null;
+	} 
+	
+	public ModuleCompilationUnit ModuleCompilationUnit.mostGeneralModule(Collection<ModuleCompilationUnit> cus) {
+		assert (cus != null) : "null parameter passed to mostGeneralModule";
+		
+		ModuleCompilationUnit ret = null;
+		
+		for (ModuleCompilationUnit currCU : cus) {
+			ModuleCompilationUnit baseCU = currCU.getBaseCU();
+			if (ret == null) {
+				ret = baseCU;
+			}
+			else if (baseCU.isInterfaceOf(ret)) {
+				ret = baseCU;
+			}
+			else if (ret.isInterfaceOf(baseCU)) {
+				//do nothing
+				ret = ret;
+			}
+			else if (ret.hasSuperModule(baseCU)) {
+				ret = baseCU;
+			}
+			else if (baseCU.hasSuperModule(ret)) {
+				//do nothing
+				ret = ret;
+			}
+			else if (baseCU.isSynthetic()) {
+				//do nothing
+				ret = ret;
+			}
+			else {
+				//if not type compatible, return null
+				return null;
+			}
+		}
+		return ret;
+	}
+	
+	//checks if a module is being accessed through a base module (i.e. there is a MCU in path
+	//of the lookup that is a base module
+	public boolean ModuleCompilationUnit.isAccessedThroughBaseModule(ModuleAccess access) {
+		String localModuleName = access.getID();
+		String left = "";
+		String right = localModuleName;
+		//successively lookup each module in the name, return true if the lookup was 
+		do {
+			int separatorIndex = right.indexOf(Program.MODULE_SEPARATOR); 
+			if (separatorIndex == -1) {
+				left = left.equals("") ? 
+					right : 
+					left + Program.MODULE_SEPARATOR + right;
+				right = "";
+			} else {
+				left = left.equals("") ?
+					right.substring(0, separatorIndex) :
+					left + Program.MODULE_SEPARATOR + right.substring(0, separatorIndex);
+				right = right.substring(separatorIndex + 2);
+			}
+			ModuleCompilationUnit mcu = lookupModule(this, left);
+			if (mcu == null) {
+				return false;
+			}
+			if (!mcu.isInstance()) {
+				return true;
+			}
+		} while (!right.equals(""));
+		return false;
+	}
+	
+	public static Set<ModuleAccess> ModuleCompilationUnit.getCascadedMergedAccesses(Set<ModuleAccess> accesses, Set<ModuleAccess> visited) {
+		Set<ModuleAccess> ret = new HashSet<ModuleAccess>(accesses);
+		Set<ModuleAccess> newAccesses = new HashSet<ModuleAccess>();
+		Set<ModuleAccess> newVisited = new HashSet<ModuleAccess>(visited);
+		
+		if (accesses.isEmpty()) {
+			return ret;
+		}
+		for (ModuleAccess access: accesses) {
+			if (visited.contains(access)) {
+				continue;
+			}
+			newVisited.add(access);
+			ModuleReference reference = access.lookupModuleReference();
+			assert (reference != null) : "Unable to find reference: " + access.toString();
+			newAccesses.addAll(reference.getMergedAccesses());
+		}
+		ret.addAll(getCascadedMergedAccesses(newAccesses, newVisited));
+		return ret;
+	}
+	
+	public static Set<ModuleReference> ModuleCompilationUnit.getAccessReferences(Set<ModuleAccess> accesses) {
+		Set<ModuleReference> ret = new HashSet<ModuleReference>();
+		for (ModuleAccess access : accesses) {
+			ModuleReference mref = access.lookupModuleReference();
+			assert (mref != null) : "Unable to find module reference: " + access.toString();
+			ret.add(mref);
+		}
+		return ret;
+	}
+	
+	public static Set<ModuleCompilationUnit> ModuleCompilationUnit.getAccessMCUs(Set<ModuleAccess> accesses) {
+		Set<ModuleCompilationUnit> ret = new HashSet<ModuleCompilationUnit>();
+		for (ModuleAccess access : accesses) {
+			ModuleCompilationUnit mcu = access.lookupModule();
+			assert (mcu != null) : "Unable to find mcu: " + access.toString();
+			ret.add(mcu);
+		}
+		return ret;
+	}
+	
+	//mcu target is being replaced with mcu
+	public static boolean ModuleCompilationUnit.isReplaceCompatible(ModuleCompilationUnit target, ModuleCompilationUnit source) {
+		return target.isInterfaceOf(source) || 
+				source.hasSuperModule(target) ||
+				source.overridesModule(target) ||
+				source.isSynthetic(); //allows synthetic types to be inserted anywhere. I know it's bad, but it's the only way to make synthetic references to work. See if there is a better way around this.
+	}
+}

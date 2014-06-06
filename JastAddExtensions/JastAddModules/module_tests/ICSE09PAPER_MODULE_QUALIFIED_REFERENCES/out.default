@@ -1,0 +1,100 @@
+Arguments: 
+-debug
+-d
+classes
+-instance-module
+myapplication
+myapplication.module
+xmlparser.module
+C.java
+Main.java
+XMLParser.java
+pack/*.java
+../testlib/jastadd$framework.module
+End arguments
+WARNING: file "pack/*.java" does not exist
+----------Module contents----------
+------myapplication.module------
+module myapplication;
+import own xmlparser as parser1;
+import own xmlparser as parser2;
+------------------------
+------xmlparser.module------
+module xmlparser;
+------------------------
+------Main.java------
+module: null;
+module CU : null
+module name : null
+------------------------
+------C.java------
+module: module myapplication;;
+module CU : myapplication.module
+module name : myapplication
+------------------------
+------XMLParser.java------
+module: module xmlparser;;
+module CU : xmlparser.module
+module name : xmlparser
+------------------------
+------../testlib/jastadd$framework.module------
+module jastadd$framework;
+------------------------
+----------CU AST before insert----------
+module: myapplication, file: myapplication.module, base module: myapplication
+module: xmlparser, file: xmlparser.module, base module: xmlparser
+Main.java package:
+C.java package:
+XMLParser.java package:xmlparser
+module: jastadd$framework, file: ../testlib/jastadd$framework.module, base module: jastadd$framework
+----------CU AST after insert----------
+module: myapplication, file: myapplication.module, base module: myapplication
+	C.java package:myapplication
+module: xmlparser, file: xmlparser.module, base module: xmlparser
+	XMLParser.java package:xmlparser.$xmlparser
+Main.java package:
+module: jastadd$framework, file: ../testlib/jastadd$framework.module, base module: jastadd$framework
+----------Module CU imports before import own----------
+module myapplication, base:myapplication, context:[], instantiated:false
+module xmlparser, base:xmlparser, context:[], instantiated:false
+module jastadd$framework, base:jastadd$framework, context:[], instantiated:false
+-------------Instance ModuleCompilationUnit------------
+module myapplication;
+import own xmlparser as parser1;
+import own xmlparser as parser2;
+export package *;
+-----------End Instance ModuleCompilationUnit----------
+----------CU AST after generateImportOwn----------
+module: myapplication, file: myapplication.module, base module: myapplication
+	C.java package:myapplication
+module: xmlparser, file: xmlparser.module, base module: xmlparser
+	XMLParser.java package:xmlparser.$xmlparser
+Main.java package:
+module: jastadd$framework, file: ../testlib/jastadd$framework.module, base module: jastadd$framework
+module: myapplication$parser1, file: xmlparser.module, base module: xmlparser
+	XMLParser.java package:myapplication$parser1.$xmlparser
+module: myapplication$parser2, file: xmlparser.module, base module: xmlparser
+	XMLParser.java package:myapplication$parser2.$xmlparser
+
+----------Module CU imports after import own----------
+module myapplication, base:myapplication, context:[], instantiated:true
+	parser1:myapplication$parser1
+	parser2:myapplication$parser2
+module xmlparser, base:xmlparser, context:[], instantiated:false
+module jastadd$framework, base:jastadd$framework, context:[], instantiated:false
+module myapplication$parser1, base:xmlparser, context:[myapplication], instantiated:true
+module myapplication$parser2, base:xmlparser, context:[myapplication], instantiated:true
+----------MCU collectTypes after import own----------
+
+Module: myapplication
+	myapplication.C
+Module: xmlparser
+	xmlparser.$xmlparser.XMLParser
+Module: jastadd$framework
+Module: myapplication$parser1
+	myapplication$parser1.$xmlparser.XMLParser
+Module: myapplication$parser2
+	myapplication$parser2.$xmlparser.XMLParser
+
+----------CU iterator----------
+myapplication.module, C.java, xmlparser.module, Main.java, ../testlib/jastadd$framework.module, xmlparser.module, XMLParser.java, xmlparser.module, XMLParser.java

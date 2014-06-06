@@ -1,0 +1,37 @@
+\subsection{\refactoring{Promote Temp to Field}}
+This refactoring turns a local variable into a field. Implemented in \sourcelink{PromoteTempToField/PromoteTempToField.jrag};
+see Algorithms~\ref{alg:PromoteTemp},~\ref{alg:InsertField}.
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Promote Temp to Field}(d : \type{LocalVar})$}
+\label{alg:PromoteTemp}
+\begin{algorithmic}[1]
+\REQUIRE Java
+\ENSURE Java $\cup$ locked dependencies
+\medskip
+\STATE $\refactoringNoExt{Split Declaration}(d)$
+\STATE $d' \leftarrow \text{new \code{private} field of same type and name as $d$}$
+\STATE make $d'$ \code{static} if $d$ is in static context
+\STATE $\refactoringNoExt{Insert Field}(\util{hostType}(d), d')$
+\FORALL{uses $u$ of $d$}
+  \STATE lock $u$ onto $d'$
+  \STATE lock reaching definitions of $u$
+\ENDFOR
+\STATE $\refactoring{Remove Decl}(d)$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Insert Field}(T : \type{ClassOrInterface}, d : \type{Field})$}
+\label{alg:InsertField}
+\begin{algorithmic}[1]
+\REQUIRE Java
+\ENSURE Java $\cup$ locked names
+\medskip
+\STATE \assert $T$ has no local field with same name as $d$
+\STATE \assert $d$ has no initialiser
+\STATE \assert if $T$ is inner and $d$ is static, then $d$ is a constant
+\STATE $\util{lockNames}(\util{name}(d))$
+\STATE insert field $d$ into $T$
+\end{algorithmic}
+\end{algorithm}

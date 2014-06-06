@@ -1,0 +1,330 @@
+aspect JastAddPrettyPrint {
+    public void SynDecl.toString(StringBuffer s) {
+    s.append(indent());
+    s.append("/*");
+    getModifiers().toString(s);
+    s.append("syn ");
+    if(isLazy())
+      s.append("lazy ");
+    getTypeAccess().toString(s);
+    s.append(" ");
+    getTargetType().toString(s);
+    s.append("." + getID());
+    s.append("(");
+    if(getNumParameter() > 0) {
+      getParameter(0).toString(s);
+      for(int i = 1; i < getNumParameter(); i++) {
+        s.append(", ");
+        getParameter(i).toString(s);
+      }
+    }
+    s.append(")");
+    if(hasBlock()) {
+      s.append(" ");
+      getBlock().toString(s);
+    }
+    else {
+      s.append(";\n");
+    }
+    s.append("*/");
+  }
+  public void SynEq.toString(StringBuffer s) {
+    s.append(indent());
+    s.append("/*");
+    s.append("eq ");
+    getTargetType().toString(s);
+    s.append("." + getID()); 
+    s.append("(");
+    if(getNumParameter() > 0) {
+      getParameter(0).toString(s);
+      for(int i = 1; i < getNumParameter(); i++) {
+        s.append(", ");
+        getParameter(i).toString(s);
+      }
+    }
+    s.append(") ");
+    getBlock().toString(s);
+    s.append("*/");
+  }
+
+  public void InhEq.toString(StringBuffer s) {
+    s.append(indent());
+    s.append("/*");
+    s.append("eq ");
+    getTargetType().toString(s);
+    s.append("." + getChildName());
+    s.append("(");
+    if(getNumChildParameter() > 0) {
+      getChildParameter(0).toString(s);
+      for(int i = 1; i < getNumChildParameter(); i++) {
+        s.append(", ");
+        getChildParameter(i).toString(s);
+      }
+    }
+    s.append(")");
+    s.append("." + getAttributeName()); 
+    s.append("(");
+    if(getNumParameter() > 0) {
+      getParameter(0).toString(s);
+      for(int i = 1; i < getNumParameter(); i++) {
+        s.append(", ");
+        getParameter(i).toString(s);
+      }
+    }
+    s.append(") ");
+    getBlock().toString(s);
+    s.append("*/");
+  }
+  
+  public void InhDecl.toString(StringBuffer s) {
+    s.append(indent());
+    s.append("/*");
+    getModifiers().toString(s);
+    s.append("inh ");
+    if(isLazy())
+      s.append("lazy ");
+    getTypeAccess().toString(s);
+    s.append(" ");
+    getTargetType().toString(s);
+    s.append("." + getID());
+    s.append("(");
+    if(getNumParameter() > 0) {
+      getParameter(0).toString(s);
+      for(int i = 1; i < getNumParameter(); i++) {
+        s.append(", ");
+        getParameter(i).toString(s);
+      }
+    }
+    s.append(")");
+    s.append(";\n");
+    s.append("*/");
+  }
+
+  public void ASTDecl.toString(StringBuffer s) {
+    s.append("/*");
+    getModifiers().toString(s);
+    s.append("ast " + getID());
+    if(hasSuperClassAccess()) {
+      s.append(" : ");
+      getSuperClassAccess().toString(s);
+    }
+    s.append(" ::=");
+    for(int i = 0; i < getNumASTChild(); i++) {
+      s.append(" ");
+      getASTChild(i).toString(s);
+    }
+    s.append(" ;\n");
+    s.append("*/");
+
+    s.append(indent());
+    getModifiers().toString(s);
+    if(!isTopLevelType())
+      s.append("static ");
+    s.append("class " + name());
+    if(hasSuperclass()) {
+      s.append(" extends " + superclass().typeName());
+    }
+    Iterator iter = interfacesIterator();
+    if(iter.hasNext()) {
+      TypeDecl interfaceDecl = (TypeDecl)iter.next();
+      s.append(" implements " + interfaceDecl.typeName());
+      while(iter.hasNext()) {
+        interfaceDecl = (TypeDecl)iter.next();
+        s.append(", " + interfaceDecl.typeName());
+      }
+    }
+
+    s.append(" {");
+    for(int i=0; i < getNumBodyDecl(); i++) {
+      getBodyDecl(i).toString(s);
+    }
+    s.append(indent() + "}");
+    /*for(int i=0; i < getNumBodyDecl(); i++) {
+      getBodyDecl(i).toString(s);
+    }*/
+  }
+
+  public void ASTChild.toString(StringBuffer s) {
+    s.append(getName());
+    if(hasType()) {
+      s.append(":");
+      getType().toString(s);
+    }
+  }
+
+  public void ASTListChild.toString(StringBuffer s) {
+    super.toString(s);
+    s.append("*");
+  }
+  
+  public void ASTOptionalChild.toString(StringBuffer s) {
+    s.append("[");
+    super.toString(s);
+    s.append("]");
+  }
+  
+  public void ASTTokenChild.toString(StringBuffer s) {
+    s.append("<");
+    super.toString(s);
+    s.append(">");
+  }
+
+  refine PrettyPrint public void Modifier.toString(StringBuffer s) {
+    // remove synthetic rather than commenting out due to no support for nested comments
+    if(!getID().equals("synthetic")) {
+      refined(s);
+    }
+  }
+
+  refine PrettyPrint public void ParameterDeclaration.toString(StringBuffer s) {
+    if(name().equals("this"))
+      s.append("final ");
+    refined(s);
+    if(name().equals("this"))
+      s.append("$");
+  }
+
+  syn boolean Expr.inITDbody() = enclosingBodyDecl() != null 
+    && enclosingBodyDecl() instanceof IntroducedMethodDecl;
+
+  syn boolean VarAccess.usesThisInITDbody() {
+    if(!(decl() instanceof FieldDeclaration))
+      return false;
+    if(inITDbody())
+      return true;
+    FieldDeclaration f = (FieldDeclaration)decl();
+    if(hostType().isAnonymous() && !hostType().memberFields(name()).contains(f) &&
+       ((Expr)hostType().getParent().getParent()).enclosingBodyDecl() instanceof IntertypeMethodDecl)
+      return true;
+    return false;
+  }
+  syn boolean MethodAccess.usesThisInITDbody() {
+    if(inITDbody())
+      return true;
+    if(hostType().isAnonymous() && !hostType().memberMethods(name()).contains(decl()) &&
+       ((Expr)hostType().getParent().getParent()).enclosingBodyDecl() instanceof IntertypeMethodDecl)
+      return true;
+    return false;
+  }
+
+  refine PrettyPrint public void VarAccess.toString(StringBuffer s) {
+    if(usesThisInITDbody()) {
+      FieldDeclaration f = (FieldDeclaration)decl();
+      if(!isQualified() && !(type().isEnumDecl() && getParent() instanceof ConstCase)) {
+        if(f.isStatic())
+          s.append(f.hostType().typeName() + ".");
+        else
+          s.append("this$.");
+      }
+    }
+    Variable v = decl().sourceVariableDecl();
+    if(v instanceof IntertypeFieldDeclaration)
+      s.append(((IntertypeFieldDeclaration)v).introducedName());
+    else
+      s.append(v.name());
+    if(name().equals("this"))
+      s.append("$");
+  }
+  refine PrettyPrint public void MethodAccess.toString(StringBuffer s) {
+    MethodDecl m = decl().sourceMethodDecl();
+    if(!isQualified() && usesThisInITDbody()) {
+      if(decl().isStatic())
+        s.append(decl().hostType().typeName() + ".");
+      else
+        s.append("this$.");
+    }
+    if(m instanceof IntertypeMethodDecl)
+      s.append(((IntertypeMethodDecl)m).delegateName());
+    else
+      s.append(m.name());
+    s.append("(");
+    if(getNumArg() > 0) {
+      getArg(0).toString(s);
+      for(int i = 1; i < getNumArg(); i++) {
+        s.append(", ");
+        getArg(i).toString(s);
+      }
+    }
+    s.append(")");
+  }
+
+	syn boolean ThisAccess.inAnonymousClassInITDbody() =
+    isQualified() && hostType().isAnonymous() &&
+    type() != hostType() && hostType().enclosingBodyDecl() instanceof IntertypeMethodDecl;
+
+  refine PrettyPrint public void ThisAccess.toString(StringBuffer s) {
+    if(inITDbody() || inStaticContext() || inAnonymousClassInITDbody())
+      s.append("this$");
+    else
+      refined(s);
+  }
+
+  syn boolean TypeDecl.printsFullName() = true;
+  eq PrimitiveType.printsFullName() = false;
+  eq VoidType.printsFullName() = false;
+  eq TypeVariable.printsFullName() = false;
+  eq AbstractWildcardType.printsFullName() = false;
+
+  refine PrettyPrint public void TypeAccess.toString(StringBuffer s) {
+    if(!isQualified() && type().printsFullName())
+      s.append(type().typeName());
+    else
+      refined(s);
+  }
+  eq RawClassDecl.typeName() {
+    if(isNestedType())
+      return enclosingType().typeName() + "." + name();
+    String packageName = packageName();
+    if(packageName.equals("") || packageName.equals(PRIMITIVE_PACKAGE_NAME))
+      return name();
+    return packageName + "." + name();
+  }
+  eq RawInterfaceDecl.typeName() {
+    if(isNestedType())
+      return enclosingType().typeName() + "." + name();
+    String packageName = packageName();
+    if(packageName.equals("") || packageName.equals(PRIMITIVE_PACKAGE_NAME))
+      return name();
+    return packageName + "." + name();
+  }
+
+  refine PrettyPrint public void AbstractDot.toString(StringBuffer s) {
+    if(!(nextAccess() instanceof ThisAccess && 
+         (inITDbody() || ((ThisAccess)nextAccess()).inAnonymousClassInITDbody()))) {
+      getLeft().toString(s);
+      if(!nextAccess().isArrayAccess())
+        s.append(".");
+    }
+    getRight().toString(s);
+  }
+
+  refine PrettyPrint public void ClassInstanceExpr.toString(StringBuffer s) {
+    if(type().isAnonymous() && inITDbody()) {
+      AnonymousDecl decl = (AnonymousDecl)type();
+      s.append("new ");
+      if(decl.getNumImplements() > 0)
+        s.append(decl.getImplements(0).type().typeName());
+      else
+        s.append(decl.superclass().typeName());
+          s.append("(");
+      if(getNumArg() > 0) {
+        getArg(0).toString(s);
+        for(int i = 1; i < getNumArg(); i++) {
+          s.append(", ");
+          getArg(i).toString(s);
+        }
+      }
+      s.append(")");
+
+      s.append(" {");
+      for(int i = 0; i < decl.getNumBodyDecl(); i++) {
+        if(!(decl.getBodyDecl(i) instanceof ConstructorDecl))
+          decl.getBodyDecl(i).toString(s);
+      }
+      s.append(typeDeclIndent());
+      s.append("}");
+    }
+    else
+      refined(s);
+  }
+}

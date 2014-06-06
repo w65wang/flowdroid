@@ -1,0 +1,20 @@
+\subsection{\refactoring{Introduce Factory}}
+This refactoring introduces a static factory method as a replacement for a given constructor, and updates all uses of the constructor to use this method instead. Implemented in \sourcelink{IntroduceFactory/IntroduceFactory.jrag}; see Algorithm~\ref{alg:IntroduceFactory}
+
+\begin{algorithm}[p]
+\caption{$\refactoring{Introduce Factory}(cd : \type{ConstructorDecl})$}
+\label{alg:IntroduceFactory}
+\begin{algorithmic}[1]
+\REQUIRE Java
+\ENSURE Java $\cup$ locked names
+\medskip
+\STATE $f \leftarrow \text{static factory method for $cd$}$
+\FORALL{uses $u$ of $cd$ and its parameterised copies}
+  \IF{$u$ is a class instance expression without anonymous class and it is not in $f$}
+    \STATE replace $u$ with a call to $f$
+  \ENDIF
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+We use \util{createFactoryMethod} (implemented in \sourcelink{util/ConstructorExt.jrag}) to create the factory method corresponding to constructor $cd$ and insert it into the host type of $cd$. The factory method has the same signature as $cd$, but it has its own copies of all type variables of the host type used in $cd$.

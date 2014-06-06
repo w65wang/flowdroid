@@ -1,0 +1,15 @@
+aspect JAModuleIntertypeDecls {
+	//from IntertypeDeclarations/IntertypeDecls.jrag
+	void ModuleCompilationUnit.collectIntertypeDecls(HashMap map) {
+		//only collect intertypedecls from instantiated modules
+		if (isModuleInstantiated()) {
+			super.collectIntertypeDecls(map);
+		}
+	}
+	protected void ModuleCompilationUnit.collectIntertypeParentDecls(HashMap map) {
+		// intertype declarations are only available in source files
+		if(isModuleInstantiated()) {
+			super.collectIntertypeParentDecls(map);
+		}
+	}
+}
